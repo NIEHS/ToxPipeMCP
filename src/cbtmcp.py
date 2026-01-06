@@ -76,6 +76,47 @@ def name_to_canonical_smiles(chemical_name: Annotated[str, Field( description="P
     except Exception as e:
         return f"Error fetching SMILES: {str(e)}"
 
+@mcp.tool
+def leadscope_qsar_model_predictions(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
+    """
+    Given the name of a chemical, return interpretations of its predicted toxicological properties based on Leadscope QSAR models.
+    """
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                SELECT DISTINCT
+                    lpm.model_name,
+                    lcp.model_value,
+                    lqd.endpoint_desc
+                FROM
+                    base_chemicals bc,
+                    base_chemical_to_pubchem_synonyms bpcs,
+                    base_chemical_to_smiles bcs,
+                    leadscope_chemical_predictions lcp,
+                    leadscope_qmrf_descriptions lqd,
+                    leadscope_predicted_models lpm, 
+                WHERE
+                    UPPER(bpcs.synonym) = UPPER(%s)
+                AND bc.epa_id = bpcs.epa_id
+                AND bc.epa_id = bcs.epa_id
+                AND bcs.smi_id = lcp.smi_id
+                AND lcp.lmodel_id = lpm.lmodel_id
+                AND lcp.lmodel_id = lqd.lmodel_id      
+                """, (chemical_name,))
+                interpretations = cur.fetchall()
+                if interpretations is None:
+                    return "no Leadscope model data available"
+                
+                interpretations_formatted = []
+                for interpretation in interpretations:
+                    interpretations_formatted.append(
+                        f"Model: {interpretation[0]}, Prediction: {interpretation[1]}, Description: {interpretation[2]}"
+                    )
+                return interpretations_formatted
+
+    except Exception as e:
+        return f"Error fetching Leadscope models: {str(e)}"
 
 def cleanup():
     pool.close()
