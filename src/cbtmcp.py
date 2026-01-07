@@ -118,6 +118,45 @@ def leadscope_qsar_model_predictions(chemical_name: Annotated[str, Field( descri
     except Exception as e:
         return f"Error fetching Leadscope models: {str(e)}"
 
+@mcp.tool
+def ctd_chemical_to_genes(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
+    """
+    Given the name of a chemical, return that chemical's associated gene interactions from the Comparative Toxicogenomics database (CTD).
+    """
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                SELECT DISTINCT
+                    ccg.interaction,
+                    ccg.organism
+                FROM
+                    base_chemicals bc,
+                    base_chemical_to_pubchem_synonyms bpcs,
+                    base_chemical_to_smiles bcs,
+                    ctd_to_base_chemicals cbc,
+                    ctd_chemicals_to_genes ccg
+                WHERE
+                    UPPER(bpcs.synonym) = UPPER(%s)
+                AND bc.epa_id = bpcs.epa_id
+                AND bc.epa_id = bcs.epa_id
+                AND bcs.smi_id = cbc.smi_id
+                AND cbc.ctd_id = ccg.ctd_id
+                """, (chemical_name,))
+                interpretations = cur.fetchall()
+                if interpretations is None:
+                    return "no CTD gene association data available"
+                
+                interpretations_formatted = []
+                for interpretation in interpretations:
+                    interpretations_formatted.append(
+                        f"Interaction: {interpretation[0]}, Organism: {interpretation[1]}"
+                    )
+                return interpretations_formatted
+
+    except Exception as e:
+        return f"Error fetching CTD gene association data: {str(e)}"
+
 def cleanup():
     pool.close()
 
