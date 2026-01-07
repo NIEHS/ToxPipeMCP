@@ -95,7 +95,7 @@ def leadscope_qsar_model_predictions(chemical_name: Annotated[str, Field( descri
                     base_chemical_to_smiles bcs,
                     leadscope_chemical_predictions lcp,
                     leadscope_qmrf_descriptions lqd,
-                    leadscope_predicted_models lpm, 
+                    leadscope_predictive_models lpm
                 WHERE
                     UPPER(bpcs.synonym) = UPPER(%s)
                 AND bc.epa_id = bpcs.epa_id
