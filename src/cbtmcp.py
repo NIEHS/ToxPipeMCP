@@ -158,18 +158,16 @@ def ctd_chemical_to_genes(chemical_name: Annotated[str, Field( description="Pref
         return f"Error fetching CTD gene association data: {str(e)}"
     
 @mcp.tool
-def ctd_chemical_to_diseases(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
+def ctd_chemical_to_diseases_direct(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
     """
-    Given the name of a chemical, return that chemical's associated diseases from the Comparative Toxicogenomics database (CTD).
+    Given the name of a chemical, return that chemical's associated diseases with direct evidence (i.e., from a marker) from the Comparative Toxicogenomics database (CTD).
     """
     try:
         with pool.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(f"""
                 SELECT DISTINCT
-                    ccd.disease_name,
-                    ccd.inference_gene_symbol,
-                    ccd.direct_evidence
+                    ccd.disease_name
                 FROM
                     base_chemicals bc,
                     base_chemical_to_pubchem_synonyms bpcs,
@@ -182,6 +180,7 @@ def ctd_chemical_to_diseases(chemical_name: Annotated[str, Field( description="P
                 AND bc.epa_id = bcs.epa_id
                 AND bcs.smi_id = cbc.smi_id
                 AND cbc.ctd_id = ccd.ctd_id
+                AND ccd.direct_evidence IS NOT NULL
                 """, (chemical_name,))
                 interpretations = cur.fetchall()
                 if interpretations is None:
@@ -189,10 +188,48 @@ def ctd_chemical_to_diseases(chemical_name: Annotated[str, Field( description="P
                 
                 interpretations_formatted = []
                 for interpretation in interpretations:
-                    if interpretation[1] is None:
-                        interpretations_formatted.append(f"Disease: {interpretation[0]}, Evidence: {interpretation[2]}")
-                    elif interpretation[1] is not None:
-                        interpretations_formatted.append(f"Disease: {interpretation[0]}, Inferred from gene: {interpretation[1]}")
+                    interpretations_formatted.append(f"{interpretation[0]}")
+                return interpretations_formatted
+
+    except Exception as e:
+        return f"Error fetching CTD disease association data: {str(e)}"
+    
+@mcp.tool
+def ctd_chemical_to_diseases_inferred(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
+    """
+    Given the name of a chemical, return that chemical's associated diseases with inferred evidence (i.e., from a gene) from the Comparative Toxicogenomics database (CTD). The output from this tool is a list of strings, with each string being of the format: disease_name | (gene from which the association was inferred from)
+    """
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                SELECT DISTINCT
+                    ccd.disease_name,
+                    ccd.inference_score,
+                    ccd.inference_gene_symbol
+                FROM
+                    base_chemicals bc,
+                    base_chemical_to_pubchem_synonyms bpcs,
+                    base_chemical_to_smiles bcs,
+                    ctd_to_base_chemicals cbc,
+                    ctd_chemicals_to_diseases ccd
+                WHERE
+                    UPPER(bpcs.synonym) = UPPER(%s)
+                AND bc.epa_id = bpcs.epa_id
+                AND bc.epa_id = bcs.epa_id
+                AND bcs.smi_id = cbc.smi_id
+                AND cbc.ctd_id = ccd.ctd_id
+                AND ccd.direct_evidence IS NULL
+                ORDER BY ccd.inference_score DESC
+                LIMIT 10
+                """, (chemical_name,))
+                interpretations = cur.fetchall()
+                if interpretations is None:
+                    return "no CTD disease association data available"
+                
+                interpretations_formatted = []
+                for interpretation in interpretations:
+                    interpretations_formatted.append(f"{interpretation[0]} | ({interpretation[2]})")
                 return interpretations_formatted
 
     except Exception as e:
