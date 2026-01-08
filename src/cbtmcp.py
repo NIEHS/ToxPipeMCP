@@ -106,7 +106,7 @@ def leadscope_qsar_model_predictions(chemical_name: Annotated[str, Field( descri
                 """, (chemical_name,))
                 interpretations = cur.fetchall()
                 if interpretations is None:
-                    return "no Leadscope model data available"
+                    return ["no Leadscope model data available"]
                 
                 interpretations_formatted = []
                 for interpretation in interpretations:
@@ -116,7 +116,7 @@ def leadscope_qsar_model_predictions(chemical_name: Annotated[str, Field( descri
                 return interpretations_formatted
 
     except Exception as e:
-        return f"Error fetching Leadscope models: {str(e)}"
+        return [f"Error fetching Leadscope models: {str(e)}"]
 
 @mcp.tool
 def ctd_chemical_to_genes(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
@@ -145,7 +145,7 @@ def ctd_chemical_to_genes(chemical_name: Annotated[str, Field( description="Pref
                 """, (chemical_name,))
                 interpretations = cur.fetchall()
                 if interpretations is None:
-                    return "no CTD gene association data available"
+                    return ["no CTD gene association data available"]
                 
                 interpretations_formatted = []
                 for interpretation in interpretations:
@@ -155,7 +155,7 @@ def ctd_chemical_to_genes(chemical_name: Annotated[str, Field( description="Pref
                 return interpretations_formatted
 
     except Exception as e:
-        return f"Error fetching CTD gene association data: {str(e)}"
+        return [f"Error fetching CTD gene association data: {str(e)}"]
     
 @mcp.tool
 def ctd_chemical_to_diseases_direct(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
@@ -184,7 +184,7 @@ def ctd_chemical_to_diseases_direct(chemical_name: Annotated[str, Field( descrip
                 """, (chemical_name,))
                 interpretations = cur.fetchall()
                 if interpretations is None:
-                    return "no CTD disease association data available"
+                    return ["no CTD disease association data available"]
                 
                 interpretations_formatted = []
                 for interpretation in interpretations:
@@ -192,7 +192,7 @@ def ctd_chemical_to_diseases_direct(chemical_name: Annotated[str, Field( descrip
                 return interpretations_formatted
 
     except Exception as e:
-        return f"Error fetching CTD disease association data: {str(e)}"
+        return [f"Error fetching CTD disease association data: {str(e)}"]
     
 @mcp.tool
 def ctd_chemical_to_diseases_inferred(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
@@ -225,7 +225,7 @@ def ctd_chemical_to_diseases_inferred(chemical_name: Annotated[str, Field( descr
                 """, (chemical_name,))
                 interpretations = cur.fetchall()
                 if interpretations is None:
-                    return "no CTD disease association data available"
+                    return ["no CTD disease association data available"]
                 
                 interpretations_formatted = []
                 for interpretation in interpretations:
@@ -233,7 +233,7 @@ def ctd_chemical_to_diseases_inferred(chemical_name: Annotated[str, Field( descr
                 return interpretations_formatted
 
     except Exception as e:
-        return f"Error fetching CTD disease association data: {str(e)}"
+        return [f"Error fetching CTD disease association data: {str(e)}"]
 
 @mcp.tool
 def ctd_chemical_to_go_biological_process(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
@@ -267,7 +267,7 @@ def ctd_chemical_to_go_biological_process(chemical_name: Annotated[str, Field( d
                 """, (chemical_name,))
                 interpretations = cur.fetchall()
                 if interpretations is None:
-                    return "no CTD biological process GO term data available"
+                    return ["no CTD biological process GO term data available"]
                 
                 interpretations_formatted = []
                 for interpretation in interpretations:
@@ -275,7 +275,7 @@ def ctd_chemical_to_go_biological_process(chemical_name: Annotated[str, Field( d
                 return interpretations_formatted
 
     except Exception as e:
-        return f"Error fetching CTD biological process GO term data: {str(e)}"
+        return [f"Error fetching CTD biological process GO term data: {str(e)}"]
     
 
 @mcp.tool
@@ -310,7 +310,7 @@ def ctd_chemical_to_go_cellular_component(chemical_name: Annotated[str, Field( d
                 """, (chemical_name,))
                 interpretations = cur.fetchall()
                 if interpretations is None:
-                    return "no CTD cellular component GO term data available"
+                    return ["no CTD cellular component GO term data available"]
                 
                 interpretations_formatted = []
                 for interpretation in interpretations:
@@ -318,7 +318,7 @@ def ctd_chemical_to_go_cellular_component(chemical_name: Annotated[str, Field( d
                 return interpretations_formatted
 
     except Exception as e:
-        return f"Error fetching CTD cellular component GO term data: {str(e)}"
+        return [f"Error fetching CTD cellular component GO term data: {str(e)}"]
     
 @mcp.tool
 def ctd_chemical_to_go_molecular_function(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
@@ -352,7 +352,7 @@ def ctd_chemical_to_go_molecular_function(chemical_name: Annotated[str, Field( d
                 """, (chemical_name,))
                 interpretations = cur.fetchall()
                 if interpretations is None:
-                    return "no CTD molecular function GO term data available"
+                    return ["no CTD molecular function GO term data available"]
                 
                 interpretations_formatted = []
                 for interpretation in interpretations:
@@ -360,7 +360,7 @@ def ctd_chemical_to_go_molecular_function(chemical_name: Annotated[str, Field( d
                 return interpretations_formatted
 
     except Exception as e:
-        return f"Error fetching CTD molecular function GO term data: {str(e)}"
+        return [f"Error fetching CTD molecular function GO term data: {str(e)}"]
 
 def cleanup():
     pool.close()
