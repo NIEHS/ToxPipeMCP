@@ -245,7 +245,8 @@ def ctd_chemical_to_go_biological_process(chemical_name: Annotated[str, Field( d
             with conn.cursor() as cur:
                 cur.execute(f"""
                 SELECT DISTINCT
-                    ccg.go_term_name
+                    ccg.go_term_name,
+                    ccg.target_match_qty
                 FROM
                     base_chemicals bc,
                     base_chemical_to_pubchem_synonyms bpcs,
@@ -287,7 +288,8 @@ def ctd_chemical_to_go_cellular_component(chemical_name: Annotated[str, Field( d
             with conn.cursor() as cur:
                 cur.execute(f"""
                 SELECT DISTINCT
-                    ccg.go_term_name
+                    ccg.go_term_name,
+                    ccg.target_match_qty
                 FROM
                     base_chemicals bc,
                     base_chemical_to_pubchem_synonyms bpcs,
@@ -328,7 +330,8 @@ def ctd_chemical_to_go_molecular_function(chemical_name: Annotated[str, Field( d
             with conn.cursor() as cur:
                 cur.execute(f"""
                 SELECT DISTINCT
-                    ccg.go_term_name
+                    ccg.go_term_name,
+                    ccg.target_match_qty
                 FROM
                     base_chemicals bc,
                     base_chemical_to_pubchem_synonyms bpcs,
