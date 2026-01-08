@@ -260,6 +260,9 @@ def ctd_chemical_to_go_biological_process(chemical_name: Annotated[str, Field( d
                 AND cbc.ctd_id = ccg.ctd_id
                 AND ccg.ontology = 'Biological Process'
                 AND ccg.corrected_pvalue < 0.05
+                AND highest_go_level > 3
+                ORDER BY ccg.target_match_qty DESC
+                LIMIT 20
                 """, (chemical_name,))
                 interpretations = cur.fetchall()
                 if interpretations is None:
@@ -299,6 +302,9 @@ def ctd_chemical_to_go_cellular_component(chemical_name: Annotated[str, Field( d
                 AND cbc.ctd_id = ccg.ctd_id
                 AND ccg.ontology = 'Cellular Component'
                 AND ccg.corrected_pvalue < 0.05
+                AND highest_go_level > 3
+                ORDER BY ccg.target_match_qty DESC
+                LIMIT 20
                 """, (chemical_name,))
                 interpretations = cur.fetchall()
                 if interpretations is None:
@@ -337,6 +343,9 @@ def ctd_chemical_to_go_molecular_function(chemical_name: Annotated[str, Field( d
                 AND cbc.ctd_id = ccg.ctd_id
                 AND ccg.ontology = 'Molecular Function'
                 AND ccg.corrected_pvalue < 0.05
+                AND highest_go_level > 3
+                ORDER BY ccg.target_match_qty DESC
+                LIMIT 20
                 """, (chemical_name,))
                 interpretations = cur.fetchall()
                 if interpretations is None:
