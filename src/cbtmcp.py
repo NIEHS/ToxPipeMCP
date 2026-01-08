@@ -158,7 +158,7 @@ def ctd_chemical_to_genes(chemical_name: Annotated[str, Field( description="Pref
         return f"Error fetching CTD gene association data: {str(e)}"
     
 @mcp.tool
-def ctd_genes_to_diseases(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
+def ctd_chemical_to_diseases(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
     """
     Given the name of a chemical, return that chemical's associated diseases from the Comparative Toxicogenomics database (CTD).
     """
@@ -197,6 +197,121 @@ def ctd_genes_to_diseases(chemical_name: Annotated[str, Field( description="Pref
 
     except Exception as e:
         return f"Error fetching CTD disease association data: {str(e)}"
+
+@mcp.tool
+def ctd_chemical_to_go_biological_process(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
+    """
+    Given the name of a chemical, return that chemical's associated biological process GO terms from the Comparative Toxicogenomics database (CTD).
+    """
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                SELECT DISTINCT
+                    ccg.go_term_name
+                FROM
+                    base_chemicals bc,
+                    base_chemical_to_pubchem_synonyms bpcs,
+                    base_chemical_to_smiles bcs,
+                    ctd_to_base_chemicals cbc,
+                    ctd_chemicals_to_goenrichment ccg
+                WHERE
+                    UPPER(bpcs.synonym) = UPPER(%s)
+                AND bc.epa_id = bpcs.epa_id
+                AND bc.epa_id = bcs.epa_id
+                AND bcs.smi_id = cbc.smi_id
+                AND cbc.ctd_id = ccg.ctd_id
+                AND ccg.ontology = 'Biological Process'
+                AND ccg.corrected_pvalue < 0.05
+                """, (chemical_name,))
+                interpretations = cur.fetchall()
+                if interpretations is None:
+                    return "no CTD biological process GO term data available"
+                
+                interpretations_formatted = []
+                for interpretation in interpretations:
+                    interpretations_formatted.append(f"{interpretation[0]}")
+                return interpretations_formatted
+
+    except Exception as e:
+        return f"Error fetching CTD biological process GO term data: {str(e)}"
+    
+
+@mcp.tool
+def ctd_chemical_to_go_cellular_component(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
+    """
+    Given the name of a chemical, return that chemical's associated cellular component GO terms from the Comparative Toxicogenomics database (CTD).
+    """
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                SELECT DISTINCT
+                    ccg.go_term_name
+                FROM
+                    base_chemicals bc,
+                    base_chemical_to_pubchem_synonyms bpcs,
+                    base_chemical_to_smiles bcs,
+                    ctd_to_base_chemicals cbc,
+                    ctd_chemicals_to_goenrichment ccg
+                WHERE
+                    UPPER(bpcs.synonym) = UPPER(%s)
+                AND bc.epa_id = bpcs.epa_id
+                AND bc.epa_id = bcs.epa_id
+                AND bcs.smi_id = cbc.smi_id
+                AND cbc.ctd_id = ccg.ctd_id
+                AND ccg.ontology = 'Cellular Component'
+                AND ccg.corrected_pvalue < 0.05
+                """, (chemical_name,))
+                interpretations = cur.fetchall()
+                if interpretations is None:
+                    return "no CTD cellular component GO term data available"
+                
+                interpretations_formatted = []
+                for interpretation in interpretations:
+                    interpretations_formatted.append(f"{interpretation[0]}")
+                return interpretations_formatted
+
+    except Exception as e:
+        return f"Error fetching CTD cellular component GO term data: {str(e)}"
+    
+@mcp.tool
+def ctd_chemical_to_go_molecular_function(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
+    """
+    Given the name of a chemical, return that chemical's associated molecular function GO terms from the Comparative Toxicogenomics database (CTD).
+    """
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                SELECT DISTINCT
+                    ccg.go_term_name
+                FROM
+                    base_chemicals bc,
+                    base_chemical_to_pubchem_synonyms bpcs,
+                    base_chemical_to_smiles bcs,
+                    ctd_to_base_chemicals cbc,
+                    ctd_chemicals_to_goenrichment ccg
+                WHERE
+                    UPPER(bpcs.synonym) = UPPER(%s)
+                AND bc.epa_id = bpcs.epa_id
+                AND bc.epa_id = bcs.epa_id
+                AND bcs.smi_id = cbc.smi_id
+                AND cbc.ctd_id = ccg.ctd_id
+                AND ccg.ontology = 'Molecular Function'
+                AND ccg.corrected_pvalue < 0.05
+                """, (chemical_name,))
+                interpretations = cur.fetchall()
+                if interpretations is None:
+                    return "no CTD molecular function GO term data available"
+                
+                interpretations_formatted = []
+                for interpretation in interpretations:
+                    interpretations_formatted.append(f"{interpretation[0]}")
+                return interpretations_formatted
+
+    except Exception as e:
+        return f"Error fetching CTD molecular function GO term data: {str(e)}"
 
 def cleanup():
     pool.close()
