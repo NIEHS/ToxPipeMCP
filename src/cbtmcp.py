@@ -361,6 +361,47 @@ def ctd_chemical_to_go_molecular_function(chemical_name: Annotated[str, Field( d
 
     except Exception as e:
         return [f"Error fetching CTD molecular function GO term data: {str(e)}"]
+    
+
+@mcp.tool
+def tox21_assay_predictions(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
+    """
+    Given the name of a chemical, return that chemical's predicted behavior(s) from Tox21 assays. Each item in the output list contains the assay model name and if the chemical was predicted to be active or inactive.
+    """
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                SELECT DISTINCT
+                    tbc.assay_model,
+                    tbc.activity_score
+                FROM
+                    base_chemicals bc,
+                    base_chemical_to_pubchem_synonyms bpcs,
+                    tox21_base_chemical_assay_predictions tbc
+                WHERE
+                    UPPER(bpcs.synonym) = UPPER(%s)
+                AND bc.epa_id = bpcs.epa_id
+                AND bc.epa_id = tbc.epa_id
+                AND (tbc.activity_score >= 0.7 OR tbc.activity_score <= 0.3)
+                ORDER BY tbc.activity_score DESC
+                LIMIT 50
+                """, (chemical_name,))
+                interpretations = cur.fetchall()
+                if interpretations is None:
+                    return ["no Tox21 predictions available"]
+                
+                interpretations_formatted = []
+                for interpretation in interpretations:
+                    status = "inactive"
+                    if interpretation[1] >= 0.7:
+                        status = "active"
+                    interpretations_formatted.append(f"{interpretation[0]}: {status}")
+                return interpretations_formatted
+
+    except Exception as e:
+        return [f"Error fetching Tox21 predictions: {str(e)}"]
+    
 
 def cleanup():
     pool.close()
