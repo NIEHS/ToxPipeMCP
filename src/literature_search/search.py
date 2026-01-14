@@ -10,7 +10,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from time import time
 from dotenv import dotenv_values
 
-DIR_HOME = Path(__file__).parent.parent.parent.parent
+DIR_HOME = Path(__file__).parent.parent
 env_config = dotenv_values(DIR_HOME / ".config" / "example.env")
 if os.path.exists(DIR_HOME / ".config" / ".env"):
     env_config = dotenv_values(DIR_HOME / ".config" / ".env")
