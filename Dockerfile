@@ -3,18 +3,21 @@ FROM python:3.11
 # Set the working directory in the container
 RUN mkdir /cbtmcp
 WORKDIR /cbtmcp
+RUN mkdir ./llm
+RUN mkdir ./rag
+RUN mkdir ./literature_search
+RUN mkdir ./.config
 
 # Copy the requirements file and install dependencies
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code
-COPY ./src/* ./
+COPY ./src/cbtmcp.py ./cbtmcp.py
+COPY ./src/.config/.env ./.config/.env
+COPY ./src/llm/* ./llm/
 COPY ./src/rag/* ./rag/
 COPY ./src/literature_search/* ./literature_search/
-COPY ./src/llm/* ./llm/
-RUN mkdir ./.config/
-COPY ./src/.config/.env ./.config/.env
 
 # Create a non-root user for security best practices
 RUN useradd --create-home --shell /bin/bash cbtmcp-user && chown -R cbtmcp-user:cbtmcp-user /cbtmcp

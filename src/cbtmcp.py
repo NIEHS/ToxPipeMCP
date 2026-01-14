@@ -1,8 +1,11 @@
+import sys
+from pathlib import Path
+DIR_HOME = Path(__file__).parent
+
 import atexit
 from dotenv import dotenv_values
 from fastmcp import FastMCP
 import os
-from pathlib import Path
 from psycopg_pool import ConnectionPool
 from pydantic import Field
 import rdkit
@@ -10,10 +13,10 @@ from rdkit import Chem
 from rdkit.Chem import Descriptors
 from typing import Annotated
 
-from literature_search import search
-from llm import llm
+import literature_search.search as search
+import llm.llm as llm
 
-DIR_HOME = Path(__file__).parent
+
 env_config = dotenv_values(DIR_HOME / ".config" / "example.env")
 if os.path.exists(DIR_HOME / ".config" / ".env"):
     env_config = dotenv_values(DIR_HOME / ".config" / ".env")
@@ -26,7 +29,6 @@ postgres_pass = env_config["CHEMBIOTOX_PASS"]
 LLM = llm.create_llm_for_search()
 
 DB_URI = f"postgresql://{postgres_user}:{postgres_pass}@{postgres_host}:{postgres_port}/chembiotox_v2"
-print(DB_URI)
 connection_kwargs = {
     "autocommit": True,
     "prepare_threshold": 0,
@@ -42,7 +44,7 @@ mcp = FastMCP(
 )
 
 @mcp.tool
-def literature_search(query: Annotated[str, Field( description="Query to perform a PubMed literature search on", min_length=1, max_length=9999)]) -> float:
+def literature_search(query: Annotated[str, Field( description="Query to perform a PubMed literature search on", min_length=1, max_length=9999)]) -> str:
     """
     Given a query, return relevant academic and scientific papers from PubMed. Use this tool if the user requests a literature search.
     """
