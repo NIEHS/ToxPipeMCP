@@ -4,17 +4,30 @@ from pathlib import Path
 import requests 
 import xmltodict
 import traceback
+from langchain.llms import BaseLLM
+from langchain.tools import BaseTool
 from langchain_core.prompts import ChatPromptTemplate
 from time import time
 from dotenv import dotenv_values
 
-DIR_HOME = Path(__file__).parent.parent
+DIR_HOME = Path(__file__).parent.parent.parent.parent
 env_config = dotenv_values(DIR_HOME / ".config" / "example.env")
 if os.path.exists(DIR_HOME / ".config" / ".env"):
     env_config = dotenv_values(DIR_HOME / ".config" / ".env")
 
 N_PAPERS = env_config["TOXPIPE_MAX_PAPERS"]
+try:
+    N_PAPERS = int(N_PAPERS)
+except Exception as e:
+    N_PAPERS = 10
+
 PAPER_CONTENT_SIZE = env_config["TOXPIPE_PAPER_CONTENT_MAX_SIZE"]
+
+try:
+    PAPER_CONTENT_SIZE = int(PAPER_CONTENT_SIZE)
+except Exception as e:
+    PAPER_CONTENT_SIZE = 10000
+
 PUBMED_API_KEY = env_config["TOXPIPE_PUBMED_API_KEY"]
 
 #### ADAPTED CODE FROM AMLAN'S PUBMED TOOL
@@ -147,8 +160,6 @@ def search_pubmed_article(query: str,
         except:
             raise Exception(response.text)
 
-    print(query)
-
     try:
         res = searchLiterature(query)
         ids = res['eSearchResult']['IdList']
@@ -167,7 +178,7 @@ def search_pubmed_article(query: str,
         except Exception as exp:
             print(f'In getArticleEutils(pmcid={id}):, Line number: {exp.__traceback__.tb_lineno}, Description: {exp}\n\n{traceback.format_exc()}')
             continue
-
+        
         if content_size is not None: body = body[:content_size]
         
         res.append({"ref": ref, "abstract": abstract, "body": body})
@@ -183,7 +194,9 @@ def paper_scraper(search: str, pdir: str = "query") -> dict:
     try:
         res = search_pubmed_article(query=search, max_results=N_PAPERS, content_size=PAPER_CONTENT_SIZE, api_key=PUBMED_API_KEY)
         return res
-    except Exception:
+    except Exception as e:
+        print(e)
+        print( traceback.print_exc())
         return {}
 
 def paper_search(llm, query: str):
@@ -207,6 +220,7 @@ def scholar2result_llm(llm, query: str):
     technical knowledge. Ask a specific question."""
 
     papers = paper_search(llm, query)
+
     if len(papers) == 0:
         #return "Not enough papers found"
         return ""
@@ -226,7 +240,7 @@ def scholar2result_llm(llm, query: str):
         try:
             summary_prompt = ChatPromptTemplate.from_template(summary_prompt_template)
             summary_chain = summary_prompt | llm
-            summary = summary_chain.invoke({"ref": p["ref"], "query": query, "content": p["content"]})
+            summary = summary_chain.invoke({"ref": p["ref"], "query": query, "content": p["body"]})
             summary = f"{summary.content} (source: {p['ref']})"
 
         except:
