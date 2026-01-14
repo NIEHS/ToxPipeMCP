@@ -10,6 +10,9 @@ from rdkit import Chem
 from rdkit.Chem import Descriptors
 from typing import Annotated
 
+from literature_search import search
+from llm import llm
+
 DIR_HOME = Path(__file__).parent
 env_config = dotenv_values(DIR_HOME / ".config" / "example.env")
 if os.path.exists(DIR_HOME / ".config" / ".env"):
@@ -19,6 +22,8 @@ postgres_host = env_config["CHEMBIOTOX_HOST"]
 postgres_port = env_config["CHEMBIOTOX_PORT"]
 postgres_user = env_config["CHEMBIOTOX_USER"]
 postgres_pass = env_config["CHEMBIOTOX_PASS"]
+
+LLM = llm.create_llm_for_search()
 
 DB_URI = f"postgresql://{postgres_user}:{postgres_pass}@{postgres_host}:{postgres_port}/chembiotox_v2"
 print(DB_URI)
@@ -35,6 +40,14 @@ mcp = FastMCP(
     name="ChemBioTox",
     instructions="This server provides data and functions relating to toxicological and chemical attribute data for over one million chemicals studied by the EPA."
 )
+
+@mcp.tool
+def literature_search(query: Annotated[str, Field( description="Query to perform a PubMed literature search on", min_length=1, max_length=9999)]) -> float:
+    """
+    Given a query, return relevant academic and scientific papers from PubMed. Use this tool if the user requests a literature search.
+    """
+    response = search.scholar2result_llm(LLM, query=query)
+    return response
 
 @mcp.tool
 def smiles_to_mol_weight(smiles: Annotated[str, Field( description="SMILES string representing a chemical's structure", min_length=1, max_length=255)]) -> float:
