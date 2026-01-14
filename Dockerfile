@@ -10,6 +10,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code
 COPY ./src/* ./
+COPY ./src/rag/* ./rag/
+COPY ./src/literature_search/* ./literature_search/
+COPY ./src/llm/* ./llm/
 RUN mkdir ./.config/
 COPY ./src/.config/.env ./.config/.env
 
