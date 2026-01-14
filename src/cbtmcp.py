@@ -10,8 +10,8 @@ from rdkit import Chem
 from rdkit.Chem import Descriptors
 from typing import Annotated
 
-from .literature_search import search
-from .llm import llm
+from literature_search import search
+from llm import llm
 
 DIR_HOME = Path(__file__).parent
 env_config = dotenv_values(DIR_HOME / ".config" / "example.env")
