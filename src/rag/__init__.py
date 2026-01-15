@@ -1,9 +1,9 @@
-#__import__('pysqlite3')
-#import sys
-#sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+__import__('pysqlite3')
+import sys
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 from .llms import getAIModel
 from .utils import State, Config
-from langchain.llms import BaseLLM
+from langchain_classic.llms import BaseLLM
 from langchain_core.exceptions import OutputParserException
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import RetryPolicy

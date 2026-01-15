@@ -17,21 +17,19 @@ def getAIModel(model_name: str, temperature: int = 0, is_embedding=False) -> Cha
     
         return ChatOpenAI(
             model=model_name,
-            base_url=Config.env_config.get('OPENAI_BASE_URL'),
-            api_key=Config.env_config.get('OPENAI_API_KEY'),
+            base_url=Config.env_config.get('AZURE_OPENAI_ENDPOINT'),
+            api_key=Config.env_config.get('AZURE_OPENAI_API_KEY'),
             temperature=temperature,
             max_tokens=None,
             timeout=None,
             max_retries=2,
-            seed=1000,
-            http_client=Config.httpx_client
+            seed=1000
         )
     
     return OpenAIEmbeddings(
         model=model_name, 
-        base_url=Config.env_config['OPENAI_BASE_URL'], 
-        api_key=Config.env_config['OPENAI_API_KEY'],
+        base_url=Config.env_config['AZURE_OPENAI_ENDPOINT'], 
+        api_key=Config.env_config['AZURE_OPENAI_API_KEY'],
         request_timeout=None,
-        max_retries=2,
-        http_client=Config.httpx_client
+        max_retries=2
     )

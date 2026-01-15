@@ -1,7 +1,7 @@
     
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser, StrOutputParser
-from langchain.output_parsers import OutputFixingParser
+from langchain_classic.output_parsers import OutputFixingParser
 from typing import Literal
 from pydantic import BaseModel, Field
 from langgraph.graph import END

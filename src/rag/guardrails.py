@@ -1,6 +1,6 @@
 from typing import Literal
 from langchain_core.output_parsers import PydanticOutputParser
-from langchain.output_parsers import OutputFixingParser
+from langchain_classic.output_parsers import OutputFixingParser
 from pydantic import BaseModel, Field
 from .utils import State, Config, setPrompt
 

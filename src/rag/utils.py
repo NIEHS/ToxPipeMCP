@@ -10,29 +10,14 @@ from typing import Annotated, List
 from typing_extensions import TypedDict
 
 import httpx
-import truststore
-truststore.inject_into_ssl()
 
 # ---------------------------------------------------------------------------
 class Config:
-    DIR_HOME = Path(__file__).parent.parent.parent
-    DIR_DATA = (DIR_HOME / 'app' / 'rag' / 'resources')
-
-    cert_path = str(DIR_HOME / '.config'/ 'NIH-FULL.pem')
-    httpx_client = httpx.Client(verify=cert_path)
+    DIR_HOME = Path(__file__).parent.parent
+    DIR_DATA = (DIR_HOME / 'rag' / 'resources')
 
     env_config = dotenv_values(DIR_HOME / ".config" / ".env")
     
-    langfuse_handler = None
-    if bool(env_config["LANGFUSE_TRACING"]):
-        langfuse = Langfuse(
-           public_key=env_config["LANGFUSE_PUBLIC_KEY"],
-           secret_key=env_config["LANGFUSE_SECRET_KEY"],
-           host=env_config["LANGFUSE_HOST"],
-           httpx_client=httpx_client
-        )
-        langfuse_handler = CallbackHandler()
-
     TOKENS_PER_LLM_CALL = 5000
     MAX_KEYPHRASES = 10
     MAX_NUM_DOCS = 5

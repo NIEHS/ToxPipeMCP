@@ -1,11 +1,11 @@
 import sys
+import os
 from pathlib import Path
 DIR_HOME = Path(__file__).parent
 
 import atexit
 from dotenv import dotenv_values
 from fastmcp import FastMCP
-import os
 from psycopg_pool import ConnectionPool
 from pydantic import Field
 import rdkit
@@ -15,7 +15,7 @@ from typing import Annotated
 
 import literature_search.search as search
 import llm.llm as llm
-
+import rag
 
 env_config = dotenv_values(DIR_HOME / ".config" / "example.env")
 if os.path.exists(DIR_HOME / ".config" / ".env"):
@@ -49,6 +49,25 @@ def literature_search(query: Annotated[str, Field( description="Query to perform
     Given a query, return relevant academic and scientific papers from PubMed. Use this tool if the user requests a literature search.
     """
     response = search.scholar2result_llm(LLM, query=query)
+    return response
+
+@mcp.tool
+def rag_search(query: Annotated[str, Field( description="Query to search across NTP publications", min_length=1, max_length=9999)]) -> str:
+    """
+    Given a query, return relevant toxicological information from publications from the National Toxicology Program (NTP) at https://ntp.niehs.nih.gov/publications. These reports are retrieved via retrieval-augmented generation (RAG). The publications include chemical, toxicity, and technical reports. This tool should be used if the user requests a literature search or a RAG search.
+    """
+    response = None
+    try:
+        response = rag.query(query, llm=LLM, use_training_data=True)
+        used_rag_context = response['steps_taken'] and (response['steps_taken'][-1] == 'query_with_context')
+        response = (f'*[The following response was taken from ' + ("RAG resources" if used_rag_context else "model's training knowledge") + ']*\n\n' + 
+                    '**Response:**\n' + response['response'] + '\n\n' +
+                    '**Searched Keyphrases:**\n' + '\n'.join([f'- {x}' for x in response['searched_keyphrases']]))
+    except Exception as e:
+        print("Error performing search.")
+        print(e)
+        return f"Error: query failed to run with message: {e}."
+    
     return response
 
 @mcp.tool

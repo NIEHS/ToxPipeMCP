@@ -7,6 +7,7 @@ import traceback
 from langchain_core.prompts import ChatPromptTemplate
 from time import time
 from dotenv import dotenv_values
+from pprint import pprint
 
 DIR_HOME = Path(__file__).parent.parent
 env_config = dotenv_values(DIR_HOME / ".config" / "example.env")
@@ -79,7 +80,7 @@ def search_pubmed_article(query: str,
             d = getPubMedArticleEutils(pmcid=pmcid)
         except Exception as exp:
             raise Exception(f'In getPubMedArticleEutils(pmcid={pmcid}), Line number: {exp.__traceback__.tb_lineno}, Description: {exp}\n\n{traceback.format_exc()}')
-            
+
         assert 'front' in d['pmc-articleset']['article'], 'Reference not available'
         assert 'body' in d['pmc-articleset']['article'], 'Content not available'
         
@@ -145,7 +146,7 @@ def search_pubmed_article(query: str,
         
         abstract = ' '.join(parseText(abstract))
         body = ' '.join(parseText(body))
-        
+
         return ref, abstract, body
     
     def searchLiterature(query, retstart=1, retmax=5):
@@ -161,7 +162,6 @@ def search_pubmed_article(query: str,
     try:
         res = searchLiterature(query)
         ids = res['eSearchResult']['IdList']
-
         if not ids: return []
         ids = ids['Id']
         if isinstance(ids, str): ids = [ids]
@@ -182,7 +182,7 @@ def search_pubmed_article(query: str,
         res.append({"ref": ref, "abstract": abstract, "body": body})
 
         if len(res) >= max_results: break
-
+    
     return res
 
 
@@ -191,10 +191,11 @@ def search_pubmed_article(query: str,
 def paper_scraper(search: str, pdir: str = "query") -> dict:
     try:
         res = search_pubmed_article(query=search, max_results=N_PAPERS, content_size=PAPER_CONTENT_SIZE, api_key=PUBMED_API_KEY)
+
         return res
     except Exception as e:
         print(e)
-        print( traceback.print_exc())
+        traceback.print_exc()
         return {}
 
 def paper_search(llm, query: str):
@@ -241,7 +242,8 @@ def scholar2result_llm(llm, query: str):
             summary = summary_chain.invoke({"ref": p["ref"], "query": query, "content": p["body"]})
             summary = f"{summary.content} (source: {p['ref']})"
 
-        except:
+        except Exception as e:
+            traceback.print_exc()
             print("Problem generating summary")
 
         answer.append(f'Summary: {summary}')
