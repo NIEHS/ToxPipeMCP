@@ -5,6 +5,7 @@ RUN mkdir /cbtmcp
 WORKDIR /cbtmcp
 RUN mkdir ./llm
 RUN mkdir ./rag
+RUN mkdir ./rag/resources
 RUN mkdir ./literature_search
 RUN mkdir ./.config
 
