@@ -3,3 +3,5 @@ ToxPipeMCP is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/d
 - Access to the NIEHS's ChemBioTox database, a relational database with toxicological data form over 1 million chemicals, curated from reputable, scientific sources like the CTD, ToxRefDB, InVitroDB, DrugBank, and more
 - PubMed literature search
 - Search via retrieval augmented generation (RAG) through reports published by the NTP.
+
+This MCP server is Dockerized and the [Dockerfile](https://github.com/NIEHS/ToxPipeMCP/blob/main/Dockerfile) is provided in the repository for quick and easy local setup.
