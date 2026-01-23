@@ -498,6 +498,79 @@ def tox21_assay_predictions(chemical_name: Annotated[str, Field( description="Pr
         return [f"Error fetching Tox21 predictions: {str(e)}"]
     
 
+@mcp.tool
+def drugbank_genes(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
+    """
+    Given the name of a chemical, return that chemical's associated gene interactions as documented in DrugBank. This tool returns a list of strings, where each entry is structured like the following: gene_name | interaction
+    """
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                SELECT DISTINCT
+                    dcg.genename,
+                    dcg.general_function
+                FROM
+                    base_chemicals bc,
+                    base_chemical_to_pubchem_synonyms bpcs,
+                    drugbank_to_base_chemicals dbc,
+                    drugbank_curated_chemicals dcc,
+                    drugbank_chemicals_to_genes dcg
+                WHERE
+                    UPPER(bpcs.synonym) = UPPER(%s)
+                AND bc.epa_id = bpcs.epa_id
+                AND bc.epa_id = dbc.epa_id
+                AND dbc.drugbank_id = dcc.drugbank_id
+                AND dcc.db_id = dcg.db_id
+                """, (chemical_name,))
+                interpretations = cur.fetchall()
+                if interpretations is None:
+                    return ["no gene interactions available"]
+                
+                interpretations_formatted = []
+                for interpretation in interpretations:
+                    interpretations_formatted.append(f"{interpretation[0]} | {interpretation[1]}")
+                return interpretations_formatted
+
+    except Exception as e:
+        return [f"Error fetching gene interactions: {str(e)}"]
+
+@mcp.tool
+def drugbank_atccodes(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
+    """
+    Given the name of a chemical, return that chemical's therapeutic properties as documented in DrugBank. Use this tool to retrieve a chemical's organ interactions, therapeutic use, and chemical properties, 
+    """
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                SELECT DISTINCT
+                    dca.atc_annotation
+                FROM
+                    base_chemicals bc,
+                    base_chemical_to_pubchem_synonyms bpcs,
+                    drugbank_to_base_chemicals dbc,
+                    drugbank_curated_chemicals dcc,
+                    drugbank_chemicals_to_atccodes dca
+                WHERE
+                    UPPER(bpcs.synonym) = UPPER(%s)
+                AND bc.epa_id = bpcs.epa_id
+                AND bc.epa_id = dbc.epa_id
+                AND dbc.drugbank_id = dcc.drugbank_id
+                AND dcc.db_id = dca.db_id
+                """, (chemical_name,))
+                interpretations = cur.fetchall()
+                if interpretations is None:
+                    return ["no therapeutic properties available"]
+                
+                interpretations_formatted = []
+                for interpretation in interpretations:
+                    interpretations_formatted.append(f"{interpretation[0]}")
+                return interpretations_formatted
+
+    except Exception as e:
+        return [f"Error fetching therapeutic properties: {str(e)}"]
+
 def cleanup():
     pool.close()
 
