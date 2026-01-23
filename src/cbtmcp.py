@@ -524,12 +524,14 @@ def drugbank_genes(chemical_name: Annotated[str, Field( description="Preferred n
                 AND dcc.db_id = dcg.db_id
                 """, (chemical_name,))
                 interpretations = cur.fetchall()
+
                 if interpretations is None:
                     return ["no gene interactions available"]
                 
                 interpretations_formatted = []
                 for interpretation in interpretations:
                     interpretations_formatted.append(f"{interpretation[0]} | {interpretation[1]}")
+
                 return interpretations_formatted
 
     except Exception as e:
