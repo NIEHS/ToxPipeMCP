@@ -81,7 +81,7 @@ def smiles_to_mol_weight(smiles: Annotated[str, Field( description="SMILES strin
 
 
 @mcp.tool
-def smiles_to_name(smiles: Annotated[str, Field( description="SMILES representation of a chemical", min_length=1, max_length=255)]) -> str:
+def smiles_to_name(smiles: Annotated[str, Field( description="SMILES representation of a chemical", min_length=1, max_length=255)]) -> list[str]:
     """
     Given a chemical's SMILES representation, return its preferred name. If an exact mapping could not be found, the most structurally similar chemical's name is returned instead. Each result from this tool is structured as follows: chemical_name (tanimoto similarity)
     """
@@ -104,7 +104,7 @@ def smiles_to_name(smiles: Annotated[str, Field( description="SMILES representat
                 AND bcrf.similarity > 0.7
                 ORDER BY similarity DESC
                 """, (smiles,))
-                chemical_name = cur.fetchone()
+                chemical_name = cur.fetchall()
                 if chemical_name is None:
                     return "no chemical name obtained"
                 
