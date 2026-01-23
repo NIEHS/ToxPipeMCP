@@ -79,6 +79,68 @@ def smiles_to_mol_weight(smiles: Annotated[str, Field( description="SMILES strin
     wt = Descriptors.MolWt(m)
     return wt
 
+
+@mcp.tool
+def smiles_to_name(smiles: Annotated[str, Field( description="SMILES representation of a chemical", min_length=1, max_length=255)]) -> str:
+    """
+    Given a chemical's SMILES representation, return its preferred name. If an exact mapping could not be found, the most structurally similar chemical's name is returned instead. Each result from this tool is structured as follows: chemical_name (tanimoto similarity)
+    """
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                SELECT DISTINCT
+                    bcc.preferred_name,
+                    bcrf.similarity
+                FROM
+                    base_chemicals bc,
+                    base_chemical_compounds bcc,
+                    base_chemical_to_smiles bcs,
+                    get_morgan_fp_neighbors(%s) bcrf
+                WHERE
+                    bc.epa_id = bcc.epa_id
+                AND bc.epa_id = bcs.epa_id
+                AND bcrf.smi_id = bcs.smi_id
+                AND bcrf.similarity > 0.7
+                ORDER BY similarity DESC
+                """, (smiles,))
+                chemical_name = cur.fetchone()
+                if chemical_name is None:
+                    return "no chemical name obtained"
+                
+                chemical_names_formatted = []
+                for chnm in chemical_names_formatted:
+                    chemical_names_formatted.append(
+                        f"{chnm[0]} ({chnm[1]})"
+                    )
+                return chemical_names_formatted
+    except Exception as e:
+        return f"Error fetching chemical name: {str(e)}"
+
+@mcp.tool
+def casrn_to_name(casrn: Annotated[str, Field( description="CASRN number for a chemical", min_length=1, max_length=255)]) -> str:
+    """
+    Given a chemical's CASRN, return its preferred name.
+    """
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                SELECT DISTINCT
+                    bcc.preferred_name
+                FROM
+                    base_chemical_compounds bcc
+                WHERE
+                    bcc.casrn = %s
+                """, (casrn,))
+                chemical_name = cur.fetchone()
+                if chemical_name is None:
+                    return "no chemical name obtained"
+                return chemical_name[0]
+    except Exception as e:
+        return f"Error fetching chemical name: {str(e)}"
+
+
 @mcp.tool
 def name_to_canonical_smiles(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> str:
     """
