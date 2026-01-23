@@ -79,11 +79,10 @@ def smiles_to_mol_weight(smiles: Annotated[str, Field( description="SMILES strin
     wt = Descriptors.MolWt(m)
     return wt
 
-
 @mcp.tool
 def smiles_to_name(smiles: Annotated[str, Field( description="SMILES representation of a chemical", min_length=1, max_length=255)]) -> list[str]:
     """
-    Given a chemical's SMILES representation, return its preferred name. If an exact mapping could not be found, the most structurally similar chemical's name is returned instead. Each result from this tool is structured as follows: chemical_name (tanimoto similarity)
+    Given a chemical's SMILES representation, return its preferred name. If an exact mapping could not be found, the most structurally similar chemical's name is returned instead. Each result from this tool is structured as follows: chemical_name | tanimoto similarity
     """
     try:
         with pool.connection() as conn:
@@ -105,13 +104,14 @@ def smiles_to_name(smiles: Annotated[str, Field( description="SMILES representat
                 ORDER BY similarity DESC
                 """, (smiles,))
                 chemical_name = cur.fetchall()
+
                 if chemical_name is None:
                     return "no chemical name obtained"
                 
                 chemical_names_formatted = []
-                for chnm in chemical_names_formatted:
+                for chnm in chemical_name:
                     chemical_names_formatted.append(
-                        f"{chnm[0]} ({chnm[1]})"
+                        f"{chnm[0]} | {chnm[1]}"
                     )
                 return chemical_names_formatted
     except Exception as e:
@@ -139,7 +139,6 @@ def casrn_to_name(casrn: Annotated[str, Field( description="CASRN number for a c
                 return chemical_name[0]
     except Exception as e:
         return f"Error fetching chemical name: {str(e)}"
-
 
 @mcp.tool
 def name_to_canonical_smiles(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> str:
@@ -507,3 +506,4 @@ atexit.register(cleanup)
 
 if __name__ == "__main__":
     mcp.run()
+
