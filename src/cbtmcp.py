@@ -540,7 +540,7 @@ def drugbank_genes(chemical_name: Annotated[str, Field( description="Preferred n
 @mcp.tool
 def drugbank_atccodes(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
     """
-    Given the name of a chemical, return that chemical's therapeutic properties as documented in DrugBank. Use this tool to retrieve a chemical's organ interactions, therapeutic use, and chemical properties, 
+    Given the name of a chemical, return that chemical's therapeutic properties as documented in DrugBank. Use this tool to retrieve a chemical's organ interactions, therapeutic use, and chemical properties.
     """
     try:
         with pool.connection() as conn:
@@ -572,6 +572,60 @@ def drugbank_atccodes(chemical_name: Annotated[str, Field( description="Preferre
 
     except Exception as e:
         return [f"Error fetching therapeutic properties: {str(e)}"]
+
+
+@mcp.tool
+def genra_results(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
+    """
+    Given the name of a chemical, return corresponding predicted organ interactions, protein interactions, health effects, associated diseases and neoplasticity, developmental toxicity, chronic toxicity, sub-chronic toxicity, subacute toxicity, and reproductive toxicity from the EPA's Generalized Read Across (GenRA) tool.
+    This tool outputs a list of strings. Each string is formatted as follows:
+
+    category:subcategory - effect
+
+    Where category may be one of the following:
+    - SAC - Subacute Toxicity
+    - MGR - Multigenerational Reproductive Toxicity
+    - REP - Reproductive Toxicity
+    - CHR - Chronic Toxicity
+    - DEV - Developmental Toxicity
+    - SUB - Sub-chronic Toxicity
+
+    """
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                SELECT DISTINCT
+                    gc.genra_category,
+                    gc.genra_category_name,
+                    bcg.genra_result
+                FROM
+                    base_chemicals bc,
+                    base_chemical_to_pubchem_synonyms bpcs,
+                    base_chemical_genra_results bcg,
+                    genra_categories gc
+                WHERE
+                    UPPER(bpcs.synonym) = UPPER(%s)
+                AND bc.epa_id = bpcs.epa_id
+                AND bc.epa_id = bcg.epa_id
+                AND bcg.gcat_id = gc.gcat_id
+                AND bcg.genra_result != 'no_effect'
+                AND bcg.genra_result != 'no_data'
+                AND bcg.genra_result IS NOT NULL
+
+                """, (chemical_name,))
+                interpretations = cur.fetchall()
+                if interpretations is None:
+                    return ["no GenRA data available"]
+                
+                interpretations_formatted = []
+                for interpretation in interpretations:
+                    interpretations_formatted.append(f"{interpretation[0]}:{interpretation[1]} - {interpretation[2]}")
+                return interpretations_formatted
+
+    except Exception as e:
+        return [f"Error fetching GenRA data: {str(e)}"]
+
 
 def cleanup():
     pool.close()
