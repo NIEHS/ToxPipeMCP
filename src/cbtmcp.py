@@ -627,6 +627,176 @@ def genra_results(chemical_name: Annotated[str, Field( description="Preferred na
         return [f"Error fetching GenRA data: {str(e)}"]
 
 
+@mcp.tool
+def t3db_targets(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
+    """
+    Given the name of a chemical, return corresponding targets as documented in the T3DB. This tool can provide information that can help inform how genes and organs interact with a chemical.
+    """
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                SELECT DISTINCT
+                    tct.target_name
+                FROM
+                    base_chemicals bc,
+                    base_chemical_to_pubchem_synonyms bpcs,
+                    t3db_to_base_chemicals tbc,
+                    t3db_curated_chemicals tcc,
+                    t3db_chemicals_to_targets tct
+                WHERE
+                    UPPER(bpcs.synonym) = UPPER(%s)
+                AND bc.epa_id = bpcs.epa_id
+                AND bc.epa_id = tbc.epa_id
+                AND tbc.t3db_id = tcc.t3db_id
+                AND tcc.t3_id = tct.t3_id
+                """, (chemical_name,))
+                interpretations = cur.fetchall()
+                if interpretations is None:
+                    return ["no target data available"]
+                
+                interpretations_formatted = []
+                for interpretation in interpretations:
+                    interpretations_formatted.append(f"{interpretation[0]}")
+                return interpretations_formatted
+
+    except Exception as e:
+        return [f"Error fetching target data: {str(e)}"]
+
+@mcp.tool
+def toxrefdb_cancer_effects(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
+    """
+    Given the name of a chemical, return that chemical's toxicological cancer-related effects as reported from studies in ToxRefDB. This tool returns a list of strings, where each item is formatted as follows:
+
+    effect; toxicity type; species; sex; life stage; target
+
+    The toxicity type may be one of the following:
+    - ACU - Acute Toxicity
+    - CHR - Chronic Toxicity
+    - DEV - Developmental Toxicity
+    - DNT - Developmental Neurotoxicity
+    - MGR - Multigenerational Reproductive Toxicity
+    - NEU - Neurological
+    - OTH - Other
+    - REP - Reproductive Toxicity
+    - SAC - Subacute Toxicity
+    - SUB - Sub-chronic Toxicity
+
+    """
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                SELECT DISTINCT
+                    teff.effect_desc,
+                    tstu.study_type,
+                    tstu.species,
+                    txtg.sex,
+                    ttef.life_stage,
+                    tend.endpoint_target
+                FROM
+                    base_chemicals bc,
+                    base_chemical_to_pubchem_synonyms bpcs,
+                    toxrefdb_study tstu,
+                    toxrefdb_chemical tche,
+                    toxrefdb_tg txtg,
+                    toxrefdb_tg_effect ttef,
+                    toxrefdb_effect teff,
+                    toxrefdb_endpoint tend,
+                    toxrefdb_pod tpod
+                WHERE
+                    UPPER(bpcs.synonym) = UPPER(%s)
+                AND bc.epa_id = bpcs.epa_id
+                AND bc.dsstox_substance_id = tche.dsstox_substance_id
+                AND tche.chemical_id::double precision = tstu.chemical_id
+                AND tstu.study_id = txtg.study_id
+                AND ttef.tg_id = txtg.tg_id
+                AND teff.effect_id = ttef.effect_id
+                AND tend.endpoint_id = teff.endpoint_id
+                AND tpod.study_id = tstu.study_id
+                AND tpod.chemical_id = tche.chemical_id
+                AND tpod.pod_type = 'lel'::text
+                AND teff.cancer_related = true
+                """, (chemical_name,))
+                interpretations = cur.fetchall()
+                if interpretations is None:
+                    return ["no effect available"]
+                
+                interpretations_formatted = []
+                for interpretation in interpretations:
+                    interpretations_formatted.append(f"{interpretation[0]}; {interpretation[1]}; {interpretation[2]}; {interpretation[3]}; {interpretation[4]}; {interpretation[5]}")
+                return interpretations_formatted
+
+    except Exception as e:
+        return [f"Error fetching effect: {str(e)}"]
+    
+@mcp.tool
+def toxrefdb_non_cancer_effects(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
+    """
+    Given the name of a chemical, return that chemical's toxicological non-cancer-related effects as reported from studies in ToxRefDB. This tool returns a list of strings, where each item is formatted as follows:
+
+    effect; study type; species; sex; life stage; target
+
+    The study type may be one of the following:
+    - ACU - Acute Toxicity
+    - CHR - Chronic Toxicity
+    - DEV - Developmental Toxicity
+    - DNT - Developmental Neurotoxicity
+    - MGR - Multigenerational Reproductive Toxicity
+    - NEU - Neurological
+    - OTH - Other
+    - REP - Reproductive Toxicity
+    - SAC - Subacute Toxicity
+    - SUB - Sub-chronic Toxicity
+
+    """
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                SELECT DISTINCT
+                    teff.effect_desc,
+                    tstu.study_type,
+                    tstu.species,
+                    txtg.sex,
+                    ttef.life_stage,
+                    tend.endpoint_target
+                FROM
+                    base_chemicals bc,
+                    base_chemical_to_pubchem_synonyms bpcs,
+                    toxrefdb_study tstu,
+                    toxrefdb_chemical tche,
+                    toxrefdb_tg txtg,
+                    toxrefdb_tg_effect ttef,
+                    toxrefdb_effect teff,
+                    toxrefdb_endpoint tend,
+                    toxrefdb_pod tpod
+                WHERE
+                    UPPER(bpcs.synonym) = UPPER(%s)
+                AND bc.epa_id = bpcs.epa_id
+                AND bc.dsstox_substance_id = tche.dsstox_substance_id
+                AND tche.chemical_id::double precision = tstu.chemical_id
+                AND tstu.study_id = txtg.study_id
+                AND ttef.tg_id = txtg.tg_id
+                AND teff.effect_id = ttef.effect_id
+                AND tend.endpoint_id = teff.endpoint_id
+                AND tpod.study_id = tstu.study_id
+                AND tpod.chemical_id = tche.chemical_id
+                AND tpod.pod_type = 'lel'::text
+                AND teff.cancer_related = false
+                """, (chemical_name,))
+                interpretations = cur.fetchall()
+                if interpretations is None:
+                    return ["no effect available"]
+                
+                interpretations_formatted = []
+                for interpretation in interpretations:
+                    interpretations_formatted.append(f"{interpretation[0]}; {interpretation[1]}; {interpretation[2]}; {interpretation[3]}; {interpretation[4]}; {interpretation[5]}")
+                return interpretations_formatted
+
+    except Exception as e:
+        return [f"Error fetching effect: {str(e)}"]
+
 def cleanup():
     pool.close()
 
