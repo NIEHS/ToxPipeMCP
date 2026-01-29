@@ -60,7 +60,7 @@ async def call_toxpipe_agent(model="azure-gpt-5", temperature=1, max_retries=10,
         max_steps=20, # Max deliberation steps the agent can take - increase this if agent is not converging
         system_prompt=system_prompt, # custom system prompt for agents
         additional_instructions=additional_instructions, # see above
-        verbose=True
+        verbose=True,
         disallowed_tools=[] # may want to disable RAG or literature search depending on how you run tests
     )
 
