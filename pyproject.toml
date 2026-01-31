@@ -5,6 +5,20 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "fastapi[standard]>=0.128.0",
+    "fastmcp>=2.14.4",
     "httpx>=0.28.1",
+    "langchain>=1.2.7",
+    "langchain-chroma>=1.1.0",
+    "langchain-classic>=1.0.1",
+    "langchain-openai>=1.1.7",
+    "langfuse>=3.12.1",
+    "langgraph>=1.0.7",
+    "mcp-use>=1.6.0",
     "mcp[cli]>=1.22.0",
+    "psycopg>=3.3.2",
+    "psycopg-pool>=3.3.0",
+    "rdkit>=2025.9.3",
+    "truststore>=0.10.4",
+    "xmltodict>=1.0.2",
 ]
