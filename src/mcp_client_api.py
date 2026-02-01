@@ -45,7 +45,7 @@ You will be given either a query from a user or an action from a previous though
 - If you find, at any time, that the most recent response sufficiently answers the user's query, you may stop calling additional tools.
 """
 
-DIR_HOME = Path(__file__).parent.parent
+DIR_HOME = Path(__file__).parent
 
 http_client = None
 cert_path = DIR_HOME / ".config/NIH-FULL.pem"
