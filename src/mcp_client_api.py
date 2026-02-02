@@ -116,6 +116,7 @@ async def query_mcp_agent(request: Request, response: Response, query: str, mode
 
     try:
         result = await agent.run(query) # Run agent without streaming
+        error = ''
     except Exception as e:
         print("Error performing search with mcp agent.")
         print(e)
