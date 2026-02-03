@@ -9,12 +9,21 @@ from typing import Annotated, List
 
 from typing_extensions import TypedDict
 
+import ssl
 import httpx
+import truststore
+truststore.inject_into_ssl()
 
 # ---------------------------------------------------------------------------
 class Config:
     DIR_HOME = Path(__file__).parent.parent
     DIR_DATA = (DIR_HOME / 'rag' / 'resources')
+    
+    http_client = None
+    cert_path = DIR_HOME / '.config' / 'NIH-FULL.pem'
+    if cert_path.exists():
+        ctx = ssl.create_default_context(cafile=str(cert_path))  # Either cafile or capath.
+        http_client = httpx.Client(verify=ctx)
 
     env_config = dotenv_values(DIR_HOME / ".config" / ".env")
     

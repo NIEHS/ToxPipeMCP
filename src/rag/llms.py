@@ -1,8 +1,10 @@
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from .utils import Config
 
+print(f'{Config.http_client=}')
+
 # ---------------------------------------------------------------------------
-def getAIModel(model_name: str, temperature: int = 0, is_embedding=False) -> ChatOpenAI | OpenAIEmbeddings:
+def getAIModel(model_name: str, temperature: int = 0, is_embedding=False, **kwargs) -> ChatOpenAI | OpenAIEmbeddings:
     """
     Initializes either an OpenAI Chat LLM object based on the LLM name and temperature
     or an OpenAI embedding model
@@ -23,7 +25,9 @@ def getAIModel(model_name: str, temperature: int = 0, is_embedding=False) -> Cha
             max_tokens=None,
             timeout=None,
             max_retries=2,
-            seed=1000
+            seed=1000,
+            http_client=Config.httpx_client,
+            **kwargs
         )
     
     return OpenAIEmbeddings(
@@ -31,5 +35,6 @@ def getAIModel(model_name: str, temperature: int = 0, is_embedding=False) -> Cha
         base_url=Config.env_config['AZURE_OPENAI_ENDPOINT'], 
         api_key=Config.env_config['AZURE_OPENAI_API_KEY'],
         request_timeout=None,
-        max_retries=2
+        max_retries=2,
+        http_client=Config.httpx_client
     )
