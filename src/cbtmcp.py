@@ -100,7 +100,7 @@ def smiles_to_name(smiles: Annotated[str, Field( description="SMILES representat
                     bc.epa_id = bcc.epa_id
                 AND bc.epa_id = bcs.epa_id
                 AND bcrf.smi_id = bcs.smi_id
-                AND bcrf.similarity > 0.7
+                AND bcrf.similarity > 0.8
                 ORDER BY similarity DESC
                 """, (smiles,))
                 chemical_name = cur.fetchall()
@@ -172,17 +172,16 @@ def name_to_canonical_smiles(chemical_name: Annotated[str, Field( description="P
         return f"Error fetching SMILES: {str(e)}"
 
 @mcp.tool
-def ctd_chemical_to_genes(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
+def ctd_chemical_to_genes(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)], species: Annotated[str, Field( description="Species corresponding to genes. Must be exactly one of: Homo sapiens, Mus musculus, Rattus norvegicus", min_length=1, max_length=255)]="Homo sapiens") -> list[str]:
     """
-    Given the name of a chemical, return that chemical's associated gene interactions from the Comparative Toxicogenomics database (CTD).
+    Given the name of a chemical and a species, return that chemical's associated gene interactions from the Comparative Toxicogenomics database (CTD). This tool returns a list of strings, where each string is an interaction for the given chemical in the specified species passed to the tool.
     """
     try:
         with pool.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(f"""
                 SELECT DISTINCT
-                    ccg.interaction,
-                    ccg.organism
+                    ccg.interaction
                 FROM
                     base_chemicals bc,
                     base_chemical_to_pubchem_synonyms bpcs,
@@ -195,7 +194,8 @@ def ctd_chemical_to_genes(chemical_name: Annotated[str, Field( description="Pref
                 AND bc.epa_id = bcs.epa_id
                 AND bcs.smi_id = cbc.smi_id
                 AND cbc.ctd_id = ccg.ctd_id
-                """, (chemical_name,))
+                AND ccg.organism LIKE %s
+                """, (chemical_name,species,))
                 interpretations = cur.fetchall()
                 if interpretations is None:
                     return ["no CTD gene association data available"]
@@ -203,7 +203,7 @@ def ctd_chemical_to_genes(chemical_name: Annotated[str, Field( description="Pref
                 interpretations_formatted = []
                 for interpretation in interpretations:
                     interpretations_formatted.append(
-                        f"Interaction: {interpretation[0]}, Organism: {interpretation[1]}"
+                        f"{interpretation[0]}"
                     )
                 return interpretations_formatted
 
@@ -762,5 +762,5 @@ atexit.register(cleanup)
 
 
 if __name__ == "__main__":
-    mcp.run()
+    mcp.run(transport="http", host="127.0.0.1", port=9222)
 

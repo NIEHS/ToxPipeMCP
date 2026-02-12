@@ -18,6 +18,7 @@ class Config:
 
     http_client = None
     cert_path = DIR_HOME / ".config" / "NIH-FULL.pem"
+
     if cert_path.exists():
         ctx = ssl.create_default_context(cafile=cert_path)  # Either cafile or capath.
         http_client = httpx.Client(verify=ctx)
