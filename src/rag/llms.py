@@ -26,7 +26,7 @@ def getAIModel(model_name: str, temperature: int = 0, is_embedding=False, **kwar
             timeout=None,
             max_retries=2,
             seed=1000,
-            http_client=Config.httpx_client,
+            http_client=Config.http_client,
             **kwargs
         )
     
@@ -36,5 +36,5 @@ def getAIModel(model_name: str, temperature: int = 0, is_embedding=False, **kwar
         api_key=Config.env_config['AZURE_OPENAI_API_KEY'],
         request_timeout=None,
         max_retries=2,
-        http_client=Config.httpx_client
+        http_client=Config.http_client
     )

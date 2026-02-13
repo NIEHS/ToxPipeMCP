@@ -71,6 +71,14 @@ def rag_search(query: Annotated[str, Field( description="Query to search across 
     return response
 
 @mcp.tool
+def is_valid_smiles(smiles: Annotated[str, Field( description="SMILES string representing a chemical's structure", min_length=1, max_length=255)]) -> bool:
+    """
+    Given a SMILES string, return whether or not it is a valid SMILES representation.
+    """
+    m = Chem.MolFromSmiles(smiles)
+    return m is not None
+
+@mcp.tool
 def smiles_to_mol_weight(smiles: Annotated[str, Field( description="SMILES string representing a chemical's structure", min_length=1, max_length=255)]) -> float:
     """
     Given a SMILES string, return the average molecular weight in g/mol of the chemical.
