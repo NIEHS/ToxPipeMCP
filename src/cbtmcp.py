@@ -109,7 +109,7 @@ def smiles_to_mol_weight(smiles: Annotated[str, Field( description="SMILES strin
 @mcp.tool
 def smiles_to_name(smiles: Annotated[str, Field( description="SMILES representation of a chemical", min_length=1, max_length=255)]) -> list[str]:
     """
-    Given a chemical's SMILES representation, return its preferred name. If an exact mapping could not be found, the most structurally similar chemical's name is returned instead. Each result from this tool is structured as follows: chemical_name | tanimoto similarity
+    Given a chemical's SMILES representation, return its preferred name. If an exact mapping could not be found, the most structurally similar chemical's name is returned instead.
 
     Args:
         smiles: A SMILES string representing a chemical's structure. This should be a string of at least one character and at most 255 characters.
@@ -303,7 +303,7 @@ def ctd_chemical_to_diseases_direct(chemical_name: Annotated[str, Field( descrip
 @mcp.tool
 def ctd_chemical_to_diseases_inferred(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
     """
-    Given the name of a chemical, return that chemical's associated diseases with inferred evidence (i.e., from a gene) from the Comparative Toxicogenomics database (CTD). The output from this tool is a list of strings, with each string being of the format: disease_name | (gene from which the association was inferred from)
+    Given the name of a chemical, return that chemical's associated diseases with inferred evidence (i.e., from a gene) from the Comparative Toxicogenomics database (CTD). The output from this tool is a list of strings, with each string being of the format: disease_name | (gene from which the association was inferred)
 
     Args:
         chemical_name: A string representing the preferred name of a chemical. This should be a string of at least one character and at most 255 characters.
