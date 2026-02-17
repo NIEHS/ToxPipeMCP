@@ -866,11 +866,13 @@ def structural_similarity(smiles: Annotated[str, Field( description="SMILES repr
     """
     Given a chemical's SMILES representation and a Tanimoto similarity threshold, return structurally similar chemicals with a Tanimoto similarity at or above the specified threshold. Similarity is calculated using Morgan fingerprints.
 
+    Chemicals returned by this tool may be structurally identical to the input chemical (i.e., synonyms of the input chemical).
+
     Args:
         smiles: A SMILES string representing a chemical's structure. This should be a string of at least one character and at most 255 characters.
         threshold: A float representing the Tanimoto similarity threshold. Unless specified, the threshold is set to a default value of 0.7. Only chemicals with a similarity at or above this threshold will be returned.
     Returns:
-        A list of strings, where each string is structured as follows: chemical_name | tanimoto similarity. The list is ordered from most to least similar chemical, and only chemicals with a Tanimoto similarity at or above the specified threshold are included in the output. If no chemicals with a Tanimoto similarity at or above the specified threshold are found, an empty list is returned.
+        A list of strings representing structurally similar chemicals to the original input smiles, where each string is structured as follows: chemical_name | smiles | tanimoto similarity. The list is ordered from most to least similar chemical, and only chemicals with a Tanimoto similarity at or above the specified threshold are included in the output. If no chemicals with a Tanimoto similarity at or above the specified threshold are found, an empty list is returned. Chemicals returned by this tool may be structurally identical to the input chemical (i.e., synonyms of the input chemical).
     """
     try:
         with pool.connection() as conn:
@@ -878,16 +880,21 @@ def structural_similarity(smiles: Annotated[str, Field( description="SMILES repr
                 cur.execute(f"""
                 SELECT DISTINCT
                     bcc.preferred_name,
+                    css.canonical_smiles,
                     bcrf.similarity
                 FROM
                     base_chemicals bc,
                     base_chemical_compounds bcc,
                     base_chemical_to_smiles bcs,
+                    smiles_to_canonical_smiles scs,
+                    canonical_smiles_strings css,
                     get_morgan_fp_neighbors(%s) bcrf
                 WHERE
                     bc.epa_id = bcc.epa_id
                 AND bc.epa_id = bcs.epa_id
                 AND bcrf.smi_id = bcs.smi_id
+                AND bcs.smi_id = scs.smi_id
+                AND scs.csm_id = css.csm_id
                 AND bcrf.similarity >= %s
                 ORDER BY similarity DESC
                 """, (smiles, threshold,))
@@ -899,7 +906,59 @@ def structural_similarity(smiles: Annotated[str, Field( description="SMILES repr
                 similar_chemicals_formatted = []
                 for chnm in similar_chemicals:
                     similar_chemicals_formatted.append(
-                        f"{chnm[0]} | {chnm[1]}"
+                        f"{chnm[0]} | {chnm[1]} | {chnm[2]}"
+                    )
+                return similar_chemicals_formatted
+    except Exception:
+        return []
+
+@mcp.tool
+def structural_similarity_nonidentical(smiles: Annotated[str, Field( description="SMILES representation of a chemical", min_length=1, max_length=255)], threshold: Annotated[float, Field( description="Tanimoto similarity threshold (default=0.7)")]=0.7) -> list[str]:
+    """
+    Given a chemical's SMILES representation and a Tanimoto similarity threshold, return structurally similar chemicals with a Tanimoto similarity at or above the specified threshold. Similarity is calculated using Morgan fingerprints.
+
+    Chemicals returned by this tool cannot be structurally identical to the input chemical (i.e., no synonyms of the input chemical).
+    
+    Args:
+        smiles: A SMILES string representing a chemical's structure. This should be a string of at least one character and at most 255 characters.
+        threshold: A float representing the Tanimoto similarity threshold. Unless specified, the threshold is set to a default value of 0.7. Only chemicals with a similarity at or above this threshold will be returned.
+    Returns:
+        A list of strings representing structurally similar chemicals to the original input smiles, where each string is structured as follows: chemical_name | smiles | tanimoto similarity. The list is ordered from most to least similar chemical, and only chemicals with a Tanimoto similarity at or above the specified threshold are included in the output. If no chemicals with a Tanimoto similarity at or above the specified threshold are found, an empty list is returned. Chemicals returned by this tool cannot be structurally identical to the input chemical (i.e., no synonyms of the input chemical).
+    """
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                SELECT DISTINCT
+                    bcc.preferred_name,
+                    css.canonical_smiles,
+                    bcrf.similarity
+                FROM
+                    base_chemicals bc,
+                    base_chemical_compounds bcc,
+                    base_chemical_to_smiles bcs,
+                    smiles_to_canonical_smiles scs,
+                    canonical_smiles_strings css,
+                    get_morgan_fp_neighbors(%s) bcrf
+                WHERE
+                    bc.epa_id = bcc.epa_id
+                AND bc.epa_id = bcs.epa_id
+                AND bcrf.smi_id = bcs.smi_id
+                AND bcs.smi_id = scs.smi_id
+                AND scs.csm_id = css.csm_id
+                AND bcrf.similarity >= %s
+                AND bcrf.similarity < 1.0
+                ORDER BY similarity DESC
+                """, (smiles, threshold,))
+                similar_chemicals = cur.fetchall()
+
+                if similar_chemicals is None:
+                    return "no chemical name obtained"
+                
+                similar_chemicals_formatted = []
+                for chnm in similar_chemicals:
+                    similar_chemicals_formatted.append(
+                        f"{chnm[0]} | {chnm[1]} | {chnm[2]}"
                     )
                 return similar_chemicals_formatted
     except Exception:
