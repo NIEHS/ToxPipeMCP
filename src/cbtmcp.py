@@ -45,8 +45,12 @@ mcp = FastMCP(
 
 @mcp.tool
 def literature_search(query: Annotated[str, Field( description="Query to perform a PubMed literature search on", min_length=1, max_length=9999)]) -> str:
-    """
-    Given a query, return relevant academic and scientific papers from PubMed. Use this tool if the user requests a literature search.
+    """Given a query, return relevant academic and scientific papers from PubMed. Use this tool if the user requests a literature search.
+
+    Args:
+        query: The query to perform a literature search on. This should be a string of at least one character and at most 9999 characters. The query should be specific enough to yield relevant results.
+    Returns:
+        A string containing the results of the literature search.
     """
     response = search.scholar2result_llm(LLM, query=query)
     return response
@@ -55,6 +59,11 @@ def literature_search(query: Annotated[str, Field( description="Query to perform
 def rag_search(query: Annotated[str, Field( description="Query to search across NTP publications", min_length=1, max_length=9999)]) -> str:
     """
     Given a query, return relevant toxicological information from publications from the National Toxicology Program (NTP) at https://ntp.niehs.nih.gov/publications. These reports are retrieved via retrieval-augmented generation (RAG). The publications include chemical, toxicity, and technical reports. This tool should be used if the user requests a literature search or a RAG search.
+
+    Args:
+        query: The query to perform a RAG search on. This should be a string of at least one character and at most 9999 characters. The query should be specific enough to yield relevant results.
+    Returns:
+        A string containing the results of the RAG search, which may include information from the model's training data and/or from NTP publications.
     """
     response = None
     try:
@@ -74,6 +83,11 @@ def rag_search(query: Annotated[str, Field( description="Query to search across 
 def is_valid_smiles(smiles: Annotated[str, Field( description="SMILES string representing a chemical's structure", min_length=1, max_length=255)]) -> bool:
     """
     Given a SMILES string, return whether or not it is a valid SMILES representation.
+
+    Args:
+        smiles: A SMILES string representing a chemical's structure. This should be a string of at least one character and at most 255 characters.
+    Returns:
+        A boolean indicating whether or not the given SMILES string is valid.
     """
     m = Chem.MolFromSmiles(smiles)
     return m is not None
@@ -82,6 +96,11 @@ def is_valid_smiles(smiles: Annotated[str, Field( description="SMILES string rep
 def smiles_to_mol_weight(smiles: Annotated[str, Field( description="SMILES string representing a chemical's structure", min_length=1, max_length=255)]) -> float:
     """
     Given a SMILES string, return the average molecular weight in g/mol of the chemical.
+
+    Args:
+        smiles: A SMILES string representing a chemical's structure. This should be a string of at least one character and at most 255 characters.
+    Returns:
+        The average molecular weight in g/mol of the chemical.
     """
     m = Chem.MolFromSmiles(smiles)
     wt = Descriptors.MolWt(m)
@@ -91,6 +110,11 @@ def smiles_to_mol_weight(smiles: Annotated[str, Field( description="SMILES strin
 def smiles_to_name(smiles: Annotated[str, Field( description="SMILES representation of a chemical", min_length=1, max_length=255)]) -> list[str]:
     """
     Given a chemical's SMILES representation, return its preferred name. If an exact mapping could not be found, the most structurally similar chemical's name is returned instead. Each result from this tool is structured as follows: chemical_name | tanimoto similarity
+
+    Args:
+        smiles: A SMILES string representing a chemical's structure. This should be a string of at least one character and at most 255 characters.
+    Returns:
+        A list of strings, where each string is structured as follows: chemical_name | tanimoto similarity. The list is ordered from most to least similar chemical, and only chemicals with a Tanimoto similarity of 0.8 or higher are included in the output. If no chemicals with a Tanimoto similarity of 0.8 or higher are found, an empty list is returned.
     """
     try:
         with pool.connection() as conn:
@@ -122,13 +146,18 @@ def smiles_to_name(smiles: Annotated[str, Field( description="SMILES representat
                         f"{chnm[0]} | {chnm[1]}"
                     )
                 return chemical_names_formatted
-    except Exception as e:
-        return f"Error fetching chemical name: {str(e)}"
+    except Exception:
+        return []
 
 @mcp.tool
 def casrn_to_name(casrn: Annotated[str, Field( description="CASRN number for a chemical", min_length=1, max_length=255)]) -> str:
     """
     Given a chemical's CASRN, return its preferred name.
+
+    Args:
+        casrn: A string representing the CASRN number for a chemical. This should be a string of at least one character and at most 255 characters.
+    Returns:
+        A string representing the preferred name of the chemical corresponding to the given CASRN. If no chemical with the given CASRN is found, a string indicating that no chemical name could be obtained is returned instead.
     """
     try:
         with pool.connection() as conn:
@@ -152,6 +181,11 @@ def casrn_to_name(casrn: Annotated[str, Field( description="CASRN number for a c
 def name_to_canonical_smiles(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> str:
     """
     Given the name of a chemical, return its canonical SMILES representation.
+
+    Args:
+        chemical_name: A string representing the preferred name of a chemical. This should be a string of at least one character and at most 255 characters.
+    Returns:
+        A string representing the canonical SMILES representation of the chemical corresponding to the given name. If no chemical with the given name is found, a string indicating that no SMILES could be obtained is returned instead.
     """
     try:
         with pool.connection() as conn:
@@ -183,6 +217,12 @@ def name_to_canonical_smiles(chemical_name: Annotated[str, Field( description="P
 def ctd_chemical_to_genes(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)], species: Annotated[str, Field( description="Species corresponding to genes. Must be exactly one of: Homo sapiens, Mus musculus, Rattus norvegicus", min_length=1, max_length=255)]="Homo sapiens") -> list[str]:
     """
     Given the name of a chemical and a species, return that chemical's associated gene interactions from the Comparative Toxicogenomics database (CTD). This tool returns a list of strings, where each string is an interaction for the given chemical in the specified species passed to the tool.
+
+    Args:
+        chemical_name: A string representing the preferred name of a chemical. This should be a string of at least one character and at most 255 characters.
+        species: A string representing the species for which gene interactions are requested. Must be exactly one of: Homo sapiens, Mus musculus, Rattus norvegicus.
+    Returns:
+        A list of strings, where each string is an interaction for the given chemical in the specified species. If no interactions are found for the given chemical in the specified species, an empty list is returned.
     """
     try:
         with pool.connection() as conn:
@@ -215,13 +255,18 @@ def ctd_chemical_to_genes(chemical_name: Annotated[str, Field( description="Pref
                     )
                 return interpretations_formatted
 
-    except Exception as e:
-        return [f"Error fetching CTD gene association data: {str(e)}"]
+    except Exception:
+        return []
     
 @mcp.tool
 def ctd_chemical_to_diseases_direct(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
     """
     Given the name of a chemical, return that chemical's associated diseases with direct evidence (i.e., from a marker) from the Comparative Toxicogenomics database (CTD).
+
+    Args:
+        chemical_name: A string representing the preferred name of a chemical. This should be a string of at least one character and at most 255 characters.
+    Returns:
+        A list of strings, where each string is a disease associated with the given chemical with direct evidence in CTD. If no diseases with direct evidence associations are found for the given chemical, an empty list is returned.
     """
     try:
         with pool.connection() as conn:
@@ -252,13 +297,18 @@ def ctd_chemical_to_diseases_direct(chemical_name: Annotated[str, Field( descrip
                     interpretations_formatted.append(f"{interpretation[0]}")
                 return interpretations_formatted
 
-    except Exception as e:
-        return [f"Error fetching CTD disease association data: {str(e)}"]
+    except Exception:
+        return []
     
 @mcp.tool
 def ctd_chemical_to_diseases_inferred(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
     """
     Given the name of a chemical, return that chemical's associated diseases with inferred evidence (i.e., from a gene) from the Comparative Toxicogenomics database (CTD). The output from this tool is a list of strings, with each string being of the format: disease_name | (gene from which the association was inferred from)
+
+    Args:
+        chemical_name: A string representing the preferred name of a chemical. This should be a string of at least one character and at most 255 characters.
+    Returns:
+        A list of strings, where each string is a disease associated with the given chemical with inferred evidence in CTD, along with the gene from which the association was inferred. If no diseases with inferred evidence associations are found for the given chemical, an empty list is returned.
     """
     try:
         with pool.connection() as conn:
@@ -293,13 +343,18 @@ def ctd_chemical_to_diseases_inferred(chemical_name: Annotated[str, Field( descr
                     interpretations_formatted.append(f"{interpretation[0]} | ({interpretation[2]})")
                 return interpretations_formatted
 
-    except Exception as e:
-        return [f"Error fetching CTD disease association data: {str(e)}"]
+    except Exception:
+        return []
 
 @mcp.tool
 def ctd_chemical_to_go_biological_process(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
     """
     Given the name of a chemical, return that chemical's associated biological process GO terms from the Comparative Toxicogenomics database (CTD).
+
+    Args:
+        chemical_name: A string representing the preferred name of a chemical. This should be a string of at least one character and at most 255 characters.
+    Returns:
+        A list of strings, where each string is a biological process GO term associated with the given chemical in CTD. If no biological process GO terms are found for the given chemical, an empty list is returned.
     """
     try:
         with pool.connection() as conn:
@@ -335,14 +390,19 @@ def ctd_chemical_to_go_biological_process(chemical_name: Annotated[str, Field( d
                     interpretations_formatted.append(f"{interpretation[0]}")
                 return interpretations_formatted
 
-    except Exception as e:
-        return [f"Error fetching CTD biological process GO term data: {str(e)}"]
+    except Exception:
+        return []
     
 
 @mcp.tool
 def ctd_chemical_to_go_cellular_component(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
     """
     Given the name of a chemical, return that chemical's associated cellular component GO terms from the Comparative Toxicogenomics database (CTD).
+
+    Args:
+        chemical_name: A string representing the preferred name of a chemical. This should be a string of at least one character and at most 255 characters.
+    Returns:
+        A list of strings, where each string is a cellular component GO term associated with the given chemical in CTD. If no cellular component GO terms are found for the given chemical, an empty list is returned.
     """
     try:
         with pool.connection() as conn:
@@ -378,13 +438,18 @@ def ctd_chemical_to_go_cellular_component(chemical_name: Annotated[str, Field( d
                     interpretations_formatted.append(f"{interpretation[0]}")
                 return interpretations_formatted
 
-    except Exception as e:
-        return [f"Error fetching CTD cellular component GO term data: {str(e)}"]
+    except Exception:
+        return []
     
 @mcp.tool
 def ctd_chemical_to_go_molecular_function(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
     """
     Given the name of a chemical, return that chemical's associated molecular function GO terms from the Comparative Toxicogenomics database (CTD).
+
+    Args:
+        chemical_name: A string representing the preferred name of a chemical. This should be a string of at least one character and at most 255 characters.
+    Returns:
+        A list of strings, where each string is a molecular function GO term associated with the given chemical in CTD. If no molecular function GO terms are found for the given chemical, an empty list is returned.
     """
     try:
         with pool.connection() as conn:
@@ -420,14 +485,19 @@ def ctd_chemical_to_go_molecular_function(chemical_name: Annotated[str, Field( d
                     interpretations_formatted.append(f"{interpretation[0]}")
                 return interpretations_formatted
 
-    except Exception as e:
-        return [f"Error fetching CTD molecular function GO term data: {str(e)}"]
+    except Exception:
+        return []
     
 
 @mcp.tool
 def tox21_assay_predictions(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
     """
     Given the name of a chemical, return that chemical's predicted behavior(s) from Tox21 assays. Each item in the output list contains the assay model name and if the chemical was predicted to be active or inactive.
+
+    Args:
+        chemical_name: A string representing the preferred name of a chemical. This should be a string of at least one character and at most 255 characters.
+    Returns:
+        A list of strings, where each string contains the assay model name and if the chemical was predicted to be active or inactive. The assay model name and activity status are formatted as follows: assay_model_name: active/inactive. If no Tox21 predictions are found for the given chemical, an empty list is returned.
     """
     try:
         with pool.connection() as conn:
@@ -461,13 +531,18 @@ def tox21_assay_predictions(chemical_name: Annotated[str, Field( description="Pr
                 return interpretations_formatted
 
     except Exception as e:
-        return [f"Error fetching Tox21 predictions: {str(e)}"]
+        return []
     
 
 @mcp.tool
 def drugbank_genes(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
     """
     Given the name of a chemical, return that chemical's associated gene interactions as documented in DrugBank. This tool returns a list of strings, where each entry is structured like the following: gene_name | interaction
+
+    Args:
+        chemical_name: A string representing the preferred name of a chemical. This should be a string of at least one character and at most 255 characters.
+    Returns:
+        A list of strings, where each string is a gene interaction for the given chemical in DrugBank, structured like the following: gene_name | interaction. If no gene interactions are found for the given chemical, an empty list is returned.
     """
     try:
         with pool.connection() as conn:
@@ -500,13 +575,18 @@ def drugbank_genes(chemical_name: Annotated[str, Field( description="Preferred n
 
                 return interpretations_formatted
 
-    except Exception as e:
-        return [f"Error fetching gene interactions: {str(e)}"]
+    except Exception:
+        return []
 
 @mcp.tool
 def drugbank_atccodes(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
     """
     Given the name of a chemical, return that chemical's therapeutic properties as documented in DrugBank. Use this tool to retrieve a chemical's organ interactions, therapeutic use, and chemical properties.
+
+    Args:
+        chemical_name: A string representing the preferred name of a chemical. This should be a string of at least one character and at most 255 characters.
+    Returns:
+        A list of strings, where each string is a therapeutic property for the given chemical in DrugBank. If no therapeutic properties are found for the given chemical, an empty list is returned.
     """
     try:
         with pool.connection() as conn:
@@ -536,8 +616,8 @@ def drugbank_atccodes(chemical_name: Annotated[str, Field( description="Preferre
                     interpretations_formatted.append(f"{interpretation[0]}")
                 return interpretations_formatted
 
-    except Exception as e:
-        return [f"Error fetching therapeutic properties: {str(e)}"]
+    except Exception:
+        return []
 
 
 @mcp.tool
@@ -555,6 +635,11 @@ def genra_results(chemical_name: Annotated[str, Field( description="Preferred na
     - CHR - Chronic Toxicity
     - DEV - Developmental Toxicity
     - SUB - Sub-chronic Toxicity
+
+    Args:
+        chemical_name: A string representing the preferred name of a chemical. This should be a string of at least one character and at most 255 characters.
+    Returns:
+        A list of strings, where each string is a GenRA prediction for the given chemical, formatted as follows: category:subcategory - effect. If no GenRA predictions are found for the given chemical, an empty list is returned.
 
     """
     try:
@@ -589,14 +674,19 @@ def genra_results(chemical_name: Annotated[str, Field( description="Preferred na
                     interpretations_formatted.append(f"{interpretation[0]}:{interpretation[1]} - {interpretation[2]}")
                 return interpretations_formatted
 
-    except Exception as e:
-        return [f"Error fetching GenRA data: {str(e)}"]
+    except Exception:
+        return []
 
 
 @mcp.tool
 def t3db_targets(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
     """
     Given the name of a chemical, return corresponding targets as documented in the T3DB. This tool can provide information that can help inform how genes and organs interact with a chemical.
+
+    Args:
+        chemical_name: A string representing the preferred name of a chemical. This should be a string of at least one character and at most 255 characters.
+    Returns:
+        A list of strings, where each string is a target associated with the given chemical in T3DB. If no targets are found for the given chemical, an empty list is returned.
     """
     try:
         with pool.connection() as conn:
@@ -626,8 +716,8 @@ def t3db_targets(chemical_name: Annotated[str, Field( description="Preferred nam
                     interpretations_formatted.append(f"{interpretation[0]}")
                 return interpretations_formatted
 
-    except Exception as e:
-        return [f"Error fetching target data: {str(e)}"]
+    except Exception:
+        return []
 
 @mcp.tool
 def toxrefdb_cancer_effects(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
@@ -648,6 +738,10 @@ def toxrefdb_cancer_effects(chemical_name: Annotated[str, Field( description="Pr
     - SAC - Subacute Toxicity
     - SUB - Sub-chronic Toxicity
 
+    Args:
+        chemical_name: A string representing the preferred name of a chemical. This should be a string of at least one character and at most 255 characters.
+    Returns:
+        A list of strings, where each string is a cancer-related effect for the given chemical in ToxRefDB, formatted as follows: effect; toxicity type; species; sex; life stage; target. If no cancer-related effects are found for the given chemical, an empty list is returned.
     """
     try:
         with pool.connection() as conn:
@@ -693,8 +787,8 @@ def toxrefdb_cancer_effects(chemical_name: Annotated[str, Field( description="Pr
                     interpretations_formatted.append(f"{interpretation[0]}; {interpretation[1]}; {interpretation[2]}; {interpretation[3]}; {interpretation[4]}; {interpretation[5]}")
                 return interpretations_formatted
 
-    except Exception as e:
-        return [f"Error fetching effect: {str(e)}"]
+    except Exception:
+        return []
     
 @mcp.tool
 def toxrefdb_non_cancer_effects(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
@@ -715,6 +809,10 @@ def toxrefdb_non_cancer_effects(chemical_name: Annotated[str, Field( description
     - SAC - Subacute Toxicity
     - SUB - Sub-chronic Toxicity
 
+    Args:
+        chemical_name: A string representing the preferred name of a chemical. This should be a string of at least one character and at most 255 characters.
+    Returns:
+        A list of strings, where each string is a non-cancer-related effect for the given chemical in ToxRefDB, formatted as follows: effect; study type; species; sex; life stage; target. If no non-cancer-related effects are found for the given chemical, an empty list is returned.
     """
     try:
         with pool.connection() as conn:
@@ -760,8 +858,8 @@ def toxrefdb_non_cancer_effects(chemical_name: Annotated[str, Field( description
                     interpretations_formatted.append(f"{interpretation[0]}; {interpretation[1]}; {interpretation[2]}; {interpretation[3]}; {interpretation[4]}; {interpretation[5]}")
                 return interpretations_formatted
 
-    except Exception as e:
-        return [f"Error fetching effect: {str(e)}"]
+    except Exception:
+        return []
 
 def cleanup():
     pool.close()
