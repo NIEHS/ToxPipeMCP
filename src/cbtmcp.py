@@ -1,14 +1,10 @@
-import sys
 import os
 from pathlib import Path
 DIR_HOME = Path(__file__).parent
 
-import atexit
 from dotenv import dotenv_values
 from fastmcp import FastMCP
-from psycopg_pool import ConnectionPool
 from pydantic import Field
-import rdkit
 from rdkit import Chem
 from rdkit.Chem import Descriptors
 from typing import Annotated
@@ -17,26 +13,17 @@ import literature_search.search as search
 import llm.llm as llm
 import rag
 
+import urllib.parse
+import requests
+import json
+
 env_config = dotenv_values(DIR_HOME / ".config" / "example.env")
 if os.path.exists(DIR_HOME / ".config" / ".env"):
     env_config = dotenv_values(DIR_HOME / ".config" / ".env")
 
-postgres_host = env_config["CHEMBIOTOX_HOST"]
-postgres_port = env_config["CHEMBIOTOX_PORT"]
-postgres_user = env_config["CHEMBIOTOX_USER"]
-postgres_pass = env_config["CHEMBIOTOX_PASS"]
+CHEMBIOTOX_URL = env_config["CHEMBIOTOX_URL"]
 
 LLM = llm.create_llm_for_search()
-
-DB_URI = f"postgresql://{postgres_user}:{postgres_pass}@{postgres_host}:{postgres_port}/chembiotox_v2"
-connection_kwargs = {
-    "autocommit": True,
-    "prepare_threshold": 0,
-}
-
-
-pool = ConnectionPool(conninfo=DB_URI, max_size=20, kwargs=connection_kwargs, open=True)
-pool.wait()
 
 mcp = FastMCP(
     name="ChemBioTox",
@@ -117,37 +104,21 @@ def smiles_to_name(smiles: Annotated[str, Field( description="SMILES representat
         A list of strings, where each string is structured as follows: chemical_name | tanimoto similarity. The list is ordered from most to least similar chemical, and only chemicals with a Tanimoto similarity of 0.8 or higher are included in the output. If no chemicals with a Tanimoto similarity of 0.8 or higher are found, an empty list is returned.
     """
     try:
-        with pool.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"""
-                SELECT DISTINCT
-                    bcc.preferred_name,
-                    bcrf.similarity
-                FROM
-                    base_chemicals bc,
-                    base_chemical_compounds bcc,
-                    base_chemical_to_smiles bcs,
-                    get_morgan_fp_neighbors(%s) bcrf
-                WHERE
-                    bc.epa_id = bcc.epa_id
-                AND bc.epa_id = bcs.epa_id
-                AND bcrf.smi_id = bcs.smi_id
-                AND bcrf.similarity > 0.8
-                ORDER BY similarity DESC
-                """, (smiles,))
-                chemical_name = cur.fetchall()
+        params = {
+            'smiles': smiles
+        }
+        encoded_params = urllib.parse.urlencode(params)
 
-                if chemical_name is None:
-                    return "no chemical name obtained"
-                
-                chemical_names_formatted = []
-                for chnm in chemical_name:
-                    chemical_names_formatted.append(
-                        f"{chnm[0]} | {chnm[1]}"
-                    )
-                return chemical_names_formatted
-    except Exception:
-        return []
+        r = requests.get(f"{CHEMBIOTOX_URL}mcp/smiles_to_name?{encoded_params}")
+        js = json.loads(r.text)
+        
+        out = []
+        for i in js:
+            out.append(f"{i['preferred_name']} | {i['similarity']}")
+        return out
+    
+    except Exception as e:
+        return [""]
 
 @mcp.tool
 def casrn_to_name(casrn: Annotated[str, Field( description="CASRN number for a chemical", min_length=1, max_length=255)]) -> str:
@@ -160,22 +131,18 @@ def casrn_to_name(casrn: Annotated[str, Field( description="CASRN number for a c
         A string representing the preferred name of the chemical corresponding to the given CASRN. If no chemical with the given CASRN is found, a string indicating that no chemical name could be obtained is returned instead.
     """
     try:
-        with pool.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"""
-                SELECT DISTINCT
-                    bcc.preferred_name
-                FROM
-                    base_chemical_compounds bcc
-                WHERE
-                    bcc.casrn = %s
-                """, (casrn,))
-                chemical_name = cur.fetchone()
-                if chemical_name is None:
-                    return "no chemical name obtained"
-                return chemical_name[0]
+        params = {
+            'casrn': casrn
+        }
+        encoded_params = urllib.parse.urlencode(params)
+        r = requests.get(f"{CHEMBIOTOX_URL}mcp/casrn_to_name?{encoded_params}")
+        js = json.loads(r.text)
+        
+        out = js[0]['preferred_name']
+        return out
+    
     except Exception as e:
-        return f"Error fetching chemical name: {str(e)}"
+        return ""
 
 @mcp.tool
 def name_to_canonical_smiles(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> str:
@@ -188,30 +155,18 @@ def name_to_canonical_smiles(chemical_name: Annotated[str, Field( description="P
         A string representing the canonical SMILES representation of the chemical corresponding to the given name. If no chemical with the given name is found, a string indicating that no SMILES could be obtained is returned instead.
     """
     try:
-        with pool.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"""
-                SELECT DISTINCT
-                    css.canonical_smiles
-                FROM
-                    base_chemicals bc,
-                    base_chemical_to_pubchem_synonyms bpcs,
-                    base_chemical_to_smiles bcs,
-                    smiles_to_canonical_smiles scs,
-                    canonical_smiles_strings css
-                WHERE
-                    UPPER(bpcs.synonym) = UPPER(%s)
-                AND bc.epa_id = bpcs.epa_id
-                AND bc.epa_id = bcs.epa_id
-                AND bcs.smi_id = scs.smi_id
-                AND scs.csm_id = css.csm_id
-                """, (chemical_name,))
-                smiles = cur.fetchone()
-                if smiles is None:
-                    return "no SMILES obtained"
-                return smiles[0]
+        params = {
+            'chemical_name': chemical_name
+        }
+        encoded_params = urllib.parse.urlencode(params)
+        r = requests.get(f"{CHEMBIOTOX_URL}mcp/name_to_canonical_smiles?{encoded_params}")
+        js = json.loads(r.text)
+        
+        out = js[0]['canonical_smiles']
+        return out
+    
     except Exception as e:
-        return f"Error fetching SMILES: {str(e)}"
+        return ""
 
 @mcp.tool
 def ctd_chemical_to_genes(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)], species: Annotated[str, Field( description="Species corresponding to genes. Must be exactly one of: Homo sapiens, Mus musculus, Rattus norvegicus", min_length=1, max_length=255)]="Homo sapiens") -> list[str]:
@@ -225,38 +180,21 @@ def ctd_chemical_to_genes(chemical_name: Annotated[str, Field( description="Pref
         A list of strings, where each string is an interaction for the given chemical in the specified species. If no interactions are found for the given chemical in the specified species, an empty list is returned.
     """
     try:
-        with pool.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"""
-                SELECT DISTINCT
-                    ccg.interaction
-                FROM
-                    base_chemicals bc,
-                    base_chemical_to_pubchem_synonyms bpcs,
-                    base_chemical_to_smiles bcs,
-                    ctd_to_base_chemicals cbc,
-                    ctd_chemicals_to_genes ccg
-                WHERE
-                    UPPER(bpcs.synonym) = UPPER(%s)
-                AND bc.epa_id = bpcs.epa_id
-                AND bc.epa_id = bcs.epa_id
-                AND bcs.smi_id = cbc.smi_id
-                AND cbc.ctd_id = ccg.ctd_id
-                AND ccg.organism LIKE %s
-                """, (chemical_name,species,))
-                interpretations = cur.fetchall()
-                if interpretations is None:
-                    return ["no CTD gene association data available"]
-                
-                interpretations_formatted = []
-                for interpretation in interpretations:
-                    interpretations_formatted.append(
-                        f"{interpretation[0]}"
-                    )
-                return interpretations_formatted
-
+        params = {
+            'chemical_name': chemical_name,
+            'species': species
+        }
+        encoded_params = urllib.parse.urlencode(params)
+        r = requests.get(f"{CHEMBIOTOX_URL}mcp/ctd_chemical_to_genes?{encoded_params}")
+        js = json.loads(r.text)
+        
+        out = []
+        for i in js:
+            out.append(i['interaction'])
+        return out
+    
     except Exception:
-        return []
+        return [""]
     
 @mcp.tool
 def ctd_chemical_to_diseases_direct(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
@@ -269,82 +207,46 @@ def ctd_chemical_to_diseases_direct(chemical_name: Annotated[str, Field( descrip
         A list of strings, where each string is a disease associated with the given chemical with direct evidence in CTD. If no diseases with direct evidence associations are found for the given chemical, an empty list is returned.
     """
     try:
-        with pool.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"""
-                SELECT DISTINCT
-                    ccd.disease_name
-                FROM
-                    base_chemicals bc,
-                    base_chemical_to_pubchem_synonyms bpcs,
-                    base_chemical_to_smiles bcs,
-                    ctd_to_base_chemicals cbc,
-                    ctd_chemicals_to_diseases ccd
-                WHERE
-                    UPPER(bpcs.synonym) = UPPER(%s)
-                AND bc.epa_id = bpcs.epa_id
-                AND bc.epa_id = bcs.epa_id
-                AND bcs.smi_id = cbc.smi_id
-                AND cbc.ctd_id = ccd.ctd_id
-                AND ccd.direct_evidence IS NOT NULL
-                """, (chemical_name,))
-                interpretations = cur.fetchall()
-                if interpretations is None:
-                    return ["no CTD disease association data available"]
-                
-                interpretations_formatted = []
-                for interpretation in interpretations:
-                    interpretations_formatted.append(f"{interpretation[0]}")
-                return interpretations_formatted
-
+        params = {
+            'chemical_name': chemical_name
+        }
+        encoded_params = urllib.parse.urlencode(params)
+        r = requests.get(f"{CHEMBIOTOX_URL}mcp/ctd_chemical_to_diseases_direct?{encoded_params}")
+        js = json.loads(r.text)
+        
+        out = []
+        for i in js:
+            out.append(i['disease_name'])
+        return out
+    
     except Exception:
-        return []
+        return [""]
     
 @mcp.tool
 def ctd_chemical_to_diseases_inferred(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
     """
-    Given the name of a chemical, return that chemical's associated diseases with inferred evidence (i.e., from a gene) from the Comparative Toxicogenomics database (CTD). The output from this tool is a list of strings, with each string being of the format: disease_name | (gene from which the association was inferred)
+    Given the name of a chemical, return that chemical's associated diseases with inferred evidence (i.e., from a gene) from the Comparative Toxicogenomics database (CTD). The output from this tool is a list of strings, with each string being of the format: disease_name | inference_score | gene from which the association was inferred
 
     Args:
         chemical_name: A string representing the preferred name of a chemical. This should be a string of at least one character and at most 255 characters.
     Returns:
-        A list of strings, where each string is a disease associated with the given chemical with inferred evidence in CTD, along with the gene from which the association was inferred. If no diseases with inferred evidence associations are found for the given chemical, an empty list is returned.
+        A list of strings, with each string being of the format: disease_name | inference_score | gene from which the association was inferred. If no diseases with inferred evidence associations are found for the given chemical, an empty list is returned.
     """
     try:
-        with pool.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"""
-                SELECT DISTINCT
-                    ccd.disease_name,
-                    ccd.inference_score,
-                    ccd.inference_gene_symbol
-                FROM
-                    base_chemicals bc,
-                    base_chemical_to_pubchem_synonyms bpcs,
-                    base_chemical_to_smiles bcs,
-                    ctd_to_base_chemicals cbc,
-                    ctd_chemicals_to_diseases ccd
-                WHERE
-                    UPPER(bpcs.synonym) = UPPER(%s)
-                AND bc.epa_id = bpcs.epa_id
-                AND bc.epa_id = bcs.epa_id
-                AND bcs.smi_id = cbc.smi_id
-                AND cbc.ctd_id = ccd.ctd_id
-                AND ccd.direct_evidence IS NULL
-                ORDER BY ccd.inference_score DESC
-                LIMIT 10
-                """, (chemical_name,))
-                interpretations = cur.fetchall()
-                if interpretations is None:
-                    return ["no CTD disease association data available"]
-                
-                interpretations_formatted = []
-                for interpretation in interpretations:
-                    interpretations_formatted.append(f"{interpretation[0]} | ({interpretation[2]})")
-                return interpretations_formatted
-
+        params = {
+            'chemical_name': chemical_name
+        }
+        encoded_params = urllib.parse.urlencode(params)
+        r = requests.get(f"{CHEMBIOTOX_URL}mcp/ctd_chemical_to_diseases_inferred?{encoded_params}")
+        js = json.loads(r.text)
+        
+        out = []
+        for i in js:
+            out.append(f"{i['disease_name']} | {i['inference_score']} | {i['inference_gene_symbol']}")
+        return out
+    
     except Exception:
-        return []
+        return [""]
 
 @mcp.tool
 def ctd_chemical_to_go_biological_process(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
@@ -354,44 +256,23 @@ def ctd_chemical_to_go_biological_process(chemical_name: Annotated[str, Field( d
     Args:
         chemical_name: A string representing the preferred name of a chemical. This should be a string of at least one character and at most 255 characters.
     Returns:
-        A list of strings, where each string is a biological process GO term associated with the given chemical in CTD. If no biological process GO terms are found for the given chemical, an empty list is returned.
+        A list of strings, where each string is a biological process GO term associated with the given chemical in CTD as well as its target match quantity. If no biological process GO terms are found for the given chemical, an empty list is returned.
     """
     try:
-        with pool.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"""
-                SELECT DISTINCT
-                    ccg.go_term_name,
-                    ccg.target_match_qty
-                FROM
-                    base_chemicals bc,
-                    base_chemical_to_pubchem_synonyms bpcs,
-                    base_chemical_to_smiles bcs,
-                    ctd_to_base_chemicals cbc,
-                    ctd_chemicals_to_goenrichment ccg
-                WHERE
-                    UPPER(bpcs.synonym) = UPPER(%s)
-                AND bc.epa_id = bpcs.epa_id
-                AND bc.epa_id = bcs.epa_id
-                AND bcs.smi_id = cbc.smi_id
-                AND cbc.ctd_id = ccg.ctd_id
-                AND ccg.ontology = 'Biological Process'
-                AND ccg.corrected_pvalue < 0.05
-                AND highest_go_level > 3
-                ORDER BY ccg.target_match_qty DESC
-                LIMIT 20
-                """, (chemical_name,))
-                interpretations = cur.fetchall()
-                if interpretations is None:
-                    return ["no CTD biological process GO term data available"]
-                
-                interpretations_formatted = []
-                for interpretation in interpretations:
-                    interpretations_formatted.append(f"{interpretation[0]}")
-                return interpretations_formatted
-
+        params = {
+            'chemical_name': chemical_name
+        }
+        encoded_params = urllib.parse.urlencode(params)
+        r = requests.get(f"{CHEMBIOTOX_URL}mcp/ctd_chemical_to_go_biological_process?{encoded_params}")
+        js = json.loads(r.text)
+        
+        out = []
+        for i in js:
+            out.append(f"{i['go_term_name']} | {i['target_match_qty']}")
+        return out
+    
     except Exception:
-        return []
+        return [""]
     
 
 @mcp.tool
@@ -402,44 +283,23 @@ def ctd_chemical_to_go_cellular_component(chemical_name: Annotated[str, Field( d
     Args:
         chemical_name: A string representing the preferred name of a chemical. This should be a string of at least one character and at most 255 characters.
     Returns:
-        A list of strings, where each string is a cellular component GO term associated with the given chemical in CTD. If no cellular component GO terms are found for the given chemical, an empty list is returned.
+        A list of strings, where each string is a cellular component GO term associated with the given chemical in CTD as well as its target match quantity. If no cellular component GO terms are found for the given chemical, an empty list is returned.
     """
     try:
-        with pool.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"""
-                SELECT DISTINCT
-                    ccg.go_term_name,
-                    ccg.target_match_qty
-                FROM
-                    base_chemicals bc,
-                    base_chemical_to_pubchem_synonyms bpcs,
-                    base_chemical_to_smiles bcs,
-                    ctd_to_base_chemicals cbc,
-                    ctd_chemicals_to_goenrichment ccg
-                WHERE
-                    UPPER(bpcs.synonym) = UPPER(%s)
-                AND bc.epa_id = bpcs.epa_id
-                AND bc.epa_id = bcs.epa_id
-                AND bcs.smi_id = cbc.smi_id
-                AND cbc.ctd_id = ccg.ctd_id
-                AND ccg.ontology = 'Cellular Component'
-                AND ccg.corrected_pvalue < 0.05
-                AND highest_go_level > 3
-                ORDER BY ccg.target_match_qty DESC
-                LIMIT 20
-                """, (chemical_name,))
-                interpretations = cur.fetchall()
-                if interpretations is None:
-                    return ["no CTD cellular component GO term data available"]
-                
-                interpretations_formatted = []
-                for interpretation in interpretations:
-                    interpretations_formatted.append(f"{interpretation[0]}")
-                return interpretations_formatted
-
+        params = {
+            'chemical_name': chemical_name
+        }
+        encoded_params = urllib.parse.urlencode(params)
+        r = requests.get(f"{CHEMBIOTOX_URL}mcp/ctd_chemical_to_go_cellular_component?{encoded_params}")
+        js = json.loads(r.text)
+        
+        out = []
+        for i in js:
+            out.append(f"{i['go_term_name']} | {i['target_match_qty']}")
+        return out
+    
     except Exception:
-        return []
+        return [""]
     
 @mcp.tool
 def ctd_chemical_to_go_molecular_function(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
@@ -449,44 +309,23 @@ def ctd_chemical_to_go_molecular_function(chemical_name: Annotated[str, Field( d
     Args:
         chemical_name: A string representing the preferred name of a chemical. This should be a string of at least one character and at most 255 characters.
     Returns:
-        A list of strings, where each string is a molecular function GO term associated with the given chemical in CTD. If no molecular function GO terms are found for the given chemical, an empty list is returned.
+        A list of strings, where each string is a molecular function GO term associated with the given chemical in CTD as well as its target match quantity. If no molecular function GO terms are found for the given chemical, an empty list is returned.
     """
     try:
-        with pool.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"""
-                SELECT DISTINCT
-                    ccg.go_term_name,
-                    ccg.target_match_qty
-                FROM
-                    base_chemicals bc,
-                    base_chemical_to_pubchem_synonyms bpcs,
-                    base_chemical_to_smiles bcs,
-                    ctd_to_base_chemicals cbc,
-                    ctd_chemicals_to_goenrichment ccg
-                WHERE
-                    UPPER(bpcs.synonym) = UPPER(%s)
-                AND bc.epa_id = bpcs.epa_id
-                AND bc.epa_id = bcs.epa_id
-                AND bcs.smi_id = cbc.smi_id
-                AND cbc.ctd_id = ccg.ctd_id
-                AND ccg.ontology = 'Molecular Function'
-                AND ccg.corrected_pvalue < 0.05
-                AND highest_go_level > 3
-                ORDER BY ccg.target_match_qty DESC
-                LIMIT 20
-                """, (chemical_name,))
-                interpretations = cur.fetchall()
-                if interpretations is None:
-                    return ["no CTD molecular function GO term data available"]
-                
-                interpretations_formatted = []
-                for interpretation in interpretations:
-                    interpretations_formatted.append(f"{interpretation[0]}")
-                return interpretations_formatted
-
+        params = {
+            'chemical_name': chemical_name
+        }
+        encoded_params = urllib.parse.urlencode(params)
+        r = requests.get(f"{CHEMBIOTOX_URL}mcp/ctd_chemical_to_go_molecular_function?{encoded_params}")
+        js = json.loads(r.text)
+        
+        out = []
+        for i in js:
+            out.append(f"{i['go_term_name']} | {i['target_match_qty']}")
+        return out
+    
     except Exception:
-        return []
+        return [""]
     
 
 @mcp.tool
@@ -500,39 +339,24 @@ def tox21_assay_predictions(chemical_name: Annotated[str, Field( description="Pr
         A list of strings, where each string contains the assay model name and if the chemical was predicted to be active or inactive. The assay model name and activity status are formatted as follows: assay_model_name: active/inactive. If no Tox21 predictions are found for the given chemical, an empty list is returned.
     """
     try:
-        with pool.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"""
-                SELECT DISTINCT
-                    tbc.assay_model,
-                    tbc.activity_score
-                FROM
-                    base_chemicals bc,
-                    base_chemical_to_pubchem_synonyms bpcs,
-                    tox21_base_chemical_assay_predictions tbc
-                WHERE
-                    UPPER(bpcs.synonym) = UPPER(%s)
-                AND bc.epa_id = bpcs.epa_id
-                AND bc.epa_id = tbc.epa_id
-                AND (tbc.activity_score >= 0.7 OR tbc.activity_score <= 0.3)
-                ORDER BY tbc.activity_score DESC
-                LIMIT 50
-                """, (chemical_name,))
-                interpretations = cur.fetchall()
-                if interpretations is None:
-                    return ["no Tox21 predictions available"]
-                
-                interpretations_formatted = []
-                for interpretation in interpretations:
-                    status = "inactive"
-                    if interpretation[1] >= 0.7:
-                        status = "active"
-                    interpretations_formatted.append(f"{interpretation[0]}: {status}")
-                return interpretations_formatted
-
-    except Exception as e:
-        return []
+        params = {
+            'chemical_name': chemical_name
+        }
+        encoded_params = urllib.parse.urlencode(params)
+        r = requests.get(f"{CHEMBIOTOX_URL}mcp/tox21_assay_predictions?{encoded_params}")
+        js = json.loads(r.text)
+        
+        out = []
+        for i in js:
+            status = "inactive"
+            if i["activity_score"] >= 0.7:
+                status = "active"
+            out.append(f"{i['assay_model']} | {status}")
+        return out
     
+    except Exception:
+        return [""]
+        
 
 @mcp.tool
 def drugbank_genes(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
@@ -545,38 +369,20 @@ def drugbank_genes(chemical_name: Annotated[str, Field( description="Preferred n
         A list of strings, where each string is a gene interaction for the given chemical in DrugBank, structured like the following: gene_name | interaction. If no gene interactions are found for the given chemical, an empty list is returned.
     """
     try:
-        with pool.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"""
-                SELECT DISTINCT
-                    dcg.genename,
-                    dcg.general_function
-                FROM
-                    base_chemicals bc,
-                    base_chemical_to_pubchem_synonyms bpcs,
-                    drugbank_to_base_chemicals dbc,
-                    drugbank_curated_chemicals dcc,
-                    drugbank_chemicals_to_genes dcg
-                WHERE
-                    UPPER(bpcs.synonym) = UPPER(%s)
-                AND bc.epa_id = bpcs.epa_id
-                AND bc.epa_id = dbc.epa_id
-                AND dbc.drugbank_id = dcc.drugbank_id
-                AND dcc.db_id = dcg.db_id
-                """, (chemical_name,))
-                interpretations = cur.fetchall()
-
-                if interpretations is None:
-                    return ["no gene interactions available"]
-                
-                interpretations_formatted = []
-                for interpretation in interpretations:
-                    interpretations_formatted.append(f"{interpretation[0]} | {interpretation[1]}")
-
-                return interpretations_formatted
-
+        params = {
+            'chemical_name': chemical_name
+        }
+        encoded_params = urllib.parse.urlencode(params)
+        r = requests.get(f"{CHEMBIOTOX_URL}mcp/drugbank_genes?{encoded_params}")
+        js = json.loads(r.text)
+        
+        out = []
+        for i in js:
+            out.append(f"{i['genename']} | {i['general_function']}")
+        return out
+    
     except Exception:
-        return []
+        return [""]
 
 @mcp.tool
 def drugbank_atccodes(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
@@ -589,36 +395,20 @@ def drugbank_atccodes(chemical_name: Annotated[str, Field( description="Preferre
         A list of strings, where each string is a therapeutic property for the given chemical in DrugBank. If no therapeutic properties are found for the given chemical, an empty list is returned.
     """
     try:
-        with pool.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"""
-                SELECT DISTINCT
-                    dca.atc_annotation
-                FROM
-                    base_chemicals bc,
-                    base_chemical_to_pubchem_synonyms bpcs,
-                    drugbank_to_base_chemicals dbc,
-                    drugbank_curated_chemicals dcc,
-                    drugbank_chemicals_to_atccodes dca
-                WHERE
-                    UPPER(bpcs.synonym) = UPPER(%s)
-                AND bc.epa_id = bpcs.epa_id
-                AND bc.epa_id = dbc.epa_id
-                AND dbc.drugbank_id = dcc.drugbank_id
-                AND dcc.db_id = dca.db_id
-                """, (chemical_name,))
-                interpretations = cur.fetchall()
-                if interpretations is None:
-                    return ["no therapeutic properties available"]
-                
-                interpretations_formatted = []
-                for interpretation in interpretations:
-                    interpretations_formatted.append(f"{interpretation[0]}")
-                return interpretations_formatted
-
+        params = {
+            'chemical_name': chemical_name
+        }
+        encoded_params = urllib.parse.urlencode(params)
+        r = requests.get(f"{CHEMBIOTOX_URL}mcp/drugbank_atccodes?{encoded_params}")
+        js = json.loads(r.text)
+        
+        out = []
+        for i in js:
+            out.append(i['atc_annotation'])
+        return out
+    
     except Exception:
-        return []
-
+        return [""]
 
 @mcp.tool
 def genra_results(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
@@ -643,39 +433,20 @@ def genra_results(chemical_name: Annotated[str, Field( description="Preferred na
 
     """
     try:
-        with pool.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"""
-                SELECT DISTINCT
-                    gc.genra_category,
-                    gc.genra_category_name,
-                    bcg.genra_result
-                FROM
-                    base_chemicals bc,
-                    base_chemical_to_pubchem_synonyms bpcs,
-                    base_chemical_genra_results bcg,
-                    genra_categories gc
-                WHERE
-                    UPPER(bpcs.synonym) = UPPER(%s)
-                AND bc.epa_id = bpcs.epa_id
-                AND bc.epa_id = bcg.epa_id
-                AND bcg.gcat_id = gc.gcat_id
-                AND bcg.genra_result != 'no_effect'
-                AND bcg.genra_result != 'no_data'
-                AND bcg.genra_result IS NOT NULL
-
-                """, (chemical_name,))
-                interpretations = cur.fetchall()
-                if interpretations is None:
-                    return ["no GenRA data available"]
-                
-                interpretations_formatted = []
-                for interpretation in interpretations:
-                    interpretations_formatted.append(f"{interpretation[0]}:{interpretation[1]} - {interpretation[2]}")
-                return interpretations_formatted
-
+        params = {
+            'chemical_name': chemical_name
+        }
+        encoded_params = urllib.parse.urlencode(params)
+        r = requests.get(f"{CHEMBIOTOX_URL}mcp/genra_results?{encoded_params}")
+        js = json.loads(r.text)
+        
+        out = []
+        for i in js:
+            out.append(f"{i['genra_category']}:{i['genra_category_name']} - {i['genra_result']}")
+        return out
+    
     except Exception:
-        return []
+        return [""]
 
 
 @mcp.tool
@@ -689,35 +460,20 @@ def t3db_targets(chemical_name: Annotated[str, Field( description="Preferred nam
         A list of strings, where each string is a target associated with the given chemical in T3DB. If no targets are found for the given chemical, an empty list is returned.
     """
     try:
-        with pool.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"""
-                SELECT DISTINCT
-                    tct.target_name
-                FROM
-                    base_chemicals bc,
-                    base_chemical_to_pubchem_synonyms bpcs,
-                    t3db_to_base_chemicals tbc,
-                    t3db_curated_chemicals tcc,
-                    t3db_chemicals_to_targets tct
-                WHERE
-                    UPPER(bpcs.synonym) = UPPER(%s)
-                AND bc.epa_id = bpcs.epa_id
-                AND bc.epa_id = tbc.epa_id
-                AND tbc.t3db_id = tcc.t3db_id
-                AND tcc.t3_id = tct.t3_id
-                """, (chemical_name,))
-                interpretations = cur.fetchall()
-                if interpretations is None:
-                    return ["no target data available"]
-                
-                interpretations_formatted = []
-                for interpretation in interpretations:
-                    interpretations_formatted.append(f"{interpretation[0]}")
-                return interpretations_formatted
-
+        params = {
+            'chemical_name': chemical_name
+        }
+        encoded_params = urllib.parse.urlencode(params)
+        r = requests.get(f"{CHEMBIOTOX_URL}mcp/t3db_targets?{encoded_params}")
+        js = json.loads(r.text)
+        
+        out = []
+        for i in js:
+            out.append(i['target_name'])
+        return out
+    
     except Exception:
-        return []
+        return [""]
 
 @mcp.tool
 def toxrefdb_cancer_effects(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
@@ -744,51 +500,20 @@ def toxrefdb_cancer_effects(chemical_name: Annotated[str, Field( description="Pr
         A list of strings, where each string is a cancer-related effect for the given chemical in ToxRefDB, formatted as follows: effect; toxicity type; species; sex; life stage; target. If no cancer-related effects are found for the given chemical, an empty list is returned.
     """
     try:
-        with pool.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"""
-                SELECT DISTINCT
-                    teff.effect_desc,
-                    tstu.study_type,
-                    tstu.species,
-                    txtg.sex,
-                    ttef.life_stage,
-                    tend.endpoint_target
-                FROM
-                    base_chemicals bc,
-                    base_chemical_to_pubchem_synonyms bpcs,
-                    toxrefdb_study tstu,
-                    toxrefdb_chemical tche,
-                    toxrefdb_tg txtg,
-                    toxrefdb_tg_effect ttef,
-                    toxrefdb_effect teff,
-                    toxrefdb_endpoint tend,
-                    toxrefdb_pod tpod
-                WHERE
-                    UPPER(bpcs.synonym) = UPPER(%s)
-                AND bc.epa_id = bpcs.epa_id
-                AND bc.dsstox_substance_id = tche.dsstox_substance_id
-                AND tche.chemical_id::double precision = tstu.chemical_id
-                AND tstu.study_id = txtg.study_id
-                AND ttef.tg_id = txtg.tg_id
-                AND teff.effect_id = ttef.effect_id
-                AND tend.endpoint_id = teff.endpoint_id
-                AND tpod.study_id = tstu.study_id
-                AND tpod.chemical_id = tche.chemical_id
-                AND tpod.pod_type = 'lel'::text
-                AND teff.cancer_related = true
-                """, (chemical_name,))
-                interpretations = cur.fetchall()
-                if interpretations is None:
-                    return ["no effect available"]
-                
-                interpretations_formatted = []
-                for interpretation in interpretations:
-                    interpretations_formatted.append(f"{interpretation[0]}; {interpretation[1]}; {interpretation[2]}; {interpretation[3]}; {interpretation[4]}; {interpretation[5]}")
-                return interpretations_formatted
-
+        params = {
+            'chemical_name': chemical_name
+        }
+        encoded_params = urllib.parse.urlencode(params)
+        r = requests.get(f"{CHEMBIOTOX_URL}mcp/toxrefdb_cancer_effects?{encoded_params}")
+        js = json.loads(r.text)
+        
+        out = []
+        for i in js:
+            out.append(f"""{i['effect_desc']}; {i['study_type']}; {i['species']}; {i['sex']}; {i['life_stage']}; {i['endpoint_target']}""")
+        return out
+    
     except Exception:
-        return []
+        return [""]
     
 @mcp.tool
 def toxrefdb_non_cancer_effects(chemical_name: Annotated[str, Field( description="Preferred name of a chemical", min_length=1, max_length=255)]) -> list[str]:
@@ -815,51 +540,20 @@ def toxrefdb_non_cancer_effects(chemical_name: Annotated[str, Field( description
         A list of strings, where each string is a non-cancer-related effect for the given chemical in ToxRefDB, formatted as follows: effect; study type; species; sex; life stage; target. If no non-cancer-related effects are found for the given chemical, an empty list is returned.
     """
     try:
-        with pool.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"""
-                SELECT DISTINCT
-                    teff.effect_desc,
-                    tstu.study_type,
-                    tstu.species,
-                    txtg.sex,
-                    ttef.life_stage,
-                    tend.endpoint_target
-                FROM
-                    base_chemicals bc,
-                    base_chemical_to_pubchem_synonyms bpcs,
-                    toxrefdb_study tstu,
-                    toxrefdb_chemical tche,
-                    toxrefdb_tg txtg,
-                    toxrefdb_tg_effect ttef,
-                    toxrefdb_effect teff,
-                    toxrefdb_endpoint tend,
-                    toxrefdb_pod tpod
-                WHERE
-                    UPPER(bpcs.synonym) = UPPER(%s)
-                AND bc.epa_id = bpcs.epa_id
-                AND bc.dsstox_substance_id = tche.dsstox_substance_id
-                AND tche.chemical_id::double precision = tstu.chemical_id
-                AND tstu.study_id = txtg.study_id
-                AND ttef.tg_id = txtg.tg_id
-                AND teff.effect_id = ttef.effect_id
-                AND tend.endpoint_id = teff.endpoint_id
-                AND tpod.study_id = tstu.study_id
-                AND tpod.chemical_id = tche.chemical_id
-                AND tpod.pod_type = 'lel'::text
-                AND teff.cancer_related = false
-                """, (chemical_name,))
-                interpretations = cur.fetchall()
-                if interpretations is None:
-                    return ["no effect available"]
-                
-                interpretations_formatted = []
-                for interpretation in interpretations:
-                    interpretations_formatted.append(f"{interpretation[0]}; {interpretation[1]}; {interpretation[2]}; {interpretation[3]}; {interpretation[4]}; {interpretation[5]}")
-                return interpretations_formatted
-
+        params = {
+            'chemical_name': chemical_name
+        }
+        encoded_params = urllib.parse.urlencode(params)
+        r = requests.get(f"{CHEMBIOTOX_URL}mcp/toxrefdb_non_cancer_effects?{encoded_params}")
+        js = json.loads(r.text)
+        
+        out = []
+        for i in js:
+            out.append(f"""{i['effect_desc']}; {i['study_type']}; {i['species']}; {i['sex']}; {i['life_stage']}; {i['endpoint_target']}""")
+        return out
+    
     except Exception:
-        return []
+        return [""]
     
 @mcp.tool
 def structural_similarity(smiles: Annotated[str, Field( description="SMILES representation of a chemical", min_length=1, max_length=255)], threshold: Annotated[float, Field( description="Tanimoto similarity threshold (default=0.7)")]=0.7) -> list[str]:
@@ -875,42 +569,21 @@ def structural_similarity(smiles: Annotated[str, Field( description="SMILES repr
         A list of strings representing structurally similar chemicals to the original input smiles, where each string is structured as follows: chemical_name | smiles | tanimoto similarity. The list is ordered from most to least similar chemical, and only chemicals with a Tanimoto similarity at or above the specified threshold are included in the output. If no chemicals with a Tanimoto similarity at or above the specified threshold are found, an empty list is returned. Chemicals returned by this tool may be structurally identical to the input chemical (i.e., synonyms of the input chemical).
     """
     try:
-        with pool.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"""
-                SELECT DISTINCT
-                    bcc.preferred_name,
-                    css.canonical_smiles,
-                    bcrf.similarity
-                FROM
-                    base_chemicals bc,
-                    base_chemical_compounds bcc,
-                    base_chemical_to_smiles bcs,
-                    smiles_to_canonical_smiles scs,
-                    canonical_smiles_strings css,
-                    get_morgan_fp_neighbors(%s) bcrf
-                WHERE
-                    bc.epa_id = bcc.epa_id
-                AND bc.epa_id = bcs.epa_id
-                AND bcrf.smi_id = bcs.smi_id
-                AND bcs.smi_id = scs.smi_id
-                AND scs.csm_id = css.csm_id
-                AND bcrf.similarity >= %s
-                ORDER BY similarity DESC
-                """, (smiles, threshold,))
-                similar_chemicals = cur.fetchall()
-
-                if similar_chemicals is None:
-                    return "no chemical name obtained"
-                
-                similar_chemicals_formatted = []
-                for chnm in similar_chemicals:
-                    similar_chemicals_formatted.append(
-                        f"{chnm[0]} | {chnm[1]} | {chnm[2]}"
-                    )
-                return similar_chemicals_formatted
+        params = {
+            'smiles': smiles,
+            'threshold': threshold
+        }
+        encoded_params = urllib.parse.urlencode(params)
+        r = requests.get(f"{CHEMBIOTOX_URL}mcp/structural_similarity?{encoded_params}")
+        js = json.loads(r.text)
+        
+        out = []
+        for i in js:
+            out.append(f"""{i['preferred_name']} | {i['canonical_smiles']} | {i['similarity']}""")
+        return out
+    
     except Exception:
-        return []
+        return [""]
 
 @mcp.tool
 def structural_similarity_nonidentical(smiles: Annotated[str, Field( description="SMILES representation of a chemical", min_length=1, max_length=255)], threshold: Annotated[float, Field( description="Tanimoto similarity threshold (default=0.7)")]=0.7) -> list[str]:
@@ -926,49 +599,21 @@ def structural_similarity_nonidentical(smiles: Annotated[str, Field( description
         A list of strings representing structurally similar chemicals to the original input smiles, where each string is structured as follows: chemical_name | smiles | tanimoto similarity. The list is ordered from most to least similar chemical, and only chemicals with a Tanimoto similarity at or above the specified threshold are included in the output. If no chemicals with a Tanimoto similarity at or above the specified threshold are found, an empty list is returned. Chemicals returned by this tool cannot be structurally identical to the input chemical (i.e., no synonyms of the input chemical).
     """
     try:
-        with pool.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"""
-                SELECT DISTINCT
-                    bcc.preferred_name,
-                    css.canonical_smiles,
-                    bcrf.similarity
-                FROM
-                    base_chemicals bc,
-                    base_chemical_compounds bcc,
-                    base_chemical_to_smiles bcs,
-                    smiles_to_canonical_smiles scs,
-                    canonical_smiles_strings css,
-                    get_morgan_fp_neighbors(%s) bcrf
-                WHERE
-                    bc.epa_id = bcc.epa_id
-                AND bc.epa_id = bcs.epa_id
-                AND bcrf.smi_id = bcs.smi_id
-                AND bcs.smi_id = scs.smi_id
-                AND scs.csm_id = css.csm_id
-                AND bcrf.similarity >= %s
-                AND bcrf.similarity < 1.0
-                ORDER BY similarity DESC
-                """, (smiles, threshold,))
-                similar_chemicals = cur.fetchall()
-
-                if similar_chemicals is None:
-                    return "no chemical name obtained"
-                
-                similar_chemicals_formatted = []
-                for chnm in similar_chemicals:
-                    similar_chemicals_formatted.append(
-                        f"{chnm[0]} | {chnm[1]} | {chnm[2]}"
-                    )
-                return similar_chemicals_formatted
+        params = {
+            'smiles': smiles,
+            'threshold': threshold
+        }
+        encoded_params = urllib.parse.urlencode(params)
+        r = requests.get(f"{CHEMBIOTOX_URL}mcp/structural_similarity_nonidentical?{encoded_params}")
+        js = json.loads(r.text)
+        
+        out = []
+        for i in js:
+            out.append(f"""{i['preferred_name']} | {i['canonical_smiles']} | {i['similarity']}""")
+        return out
+    
     except Exception:
-        return []
-
-def cleanup():
-    pool.close()
-
-atexit.register(cleanup)
-
+        return [""]
 
 if __name__ == "__main__":
     mcp.run(transport="http", host="127.0.0.1", port=9222)

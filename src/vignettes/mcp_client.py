@@ -2,7 +2,7 @@ import asyncio
 from langchain_openai import AzureChatOpenAI
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain.agents import create_agent
-from ..utils import Config
+from utils import Config
 
 system_prompt = """\
 You are an expert toxicologist with extensive knowledge in chemical safety assessment, toxicokinetics, and toxicodynamics. 

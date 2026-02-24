@@ -211,3 +211,4 @@ __marimo__/
 testclient.py
 
 **/*.pem
+parkertest.py
