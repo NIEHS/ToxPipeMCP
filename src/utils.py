@@ -16,8 +16,10 @@ class Config:
     if os.path.exists(DIR_HOME / ".config" / ".env"):
         env_config = dotenv_values(DIR_HOME / ".config" / ".env")
 
+    CERT_NAME = str(env_config["CERT_NAME"])
+
     http_client = None
-    cert_path = DIR_HOME / ".config" / "NIH-FULL.pem"
+    cert_path = DIR_HOME / ".config" / CERT_NAME
 
     if cert_path.exists():
         ctx = ssl.create_default_context(cafile=cert_path)  # Either cafile or capath.
