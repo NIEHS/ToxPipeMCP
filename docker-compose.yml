@@ -3,8 +3,8 @@ version: '3.4'
 # Please consult our docs for more info: https://docs.librechat.ai/install/configuration/docker_override.html
 
 services:
-  fastmcp-chembiotox:
-    container_name: fastmcp-chembiotox
+  toxpipe-mcp:
+    container_name: toxpipe-mcp
     image: cbtmcp
     ports:
       - "9222:9222"
@@ -19,4 +19,4 @@ networks:
     external: true
 
 volumes:
-  cbtmcp:
+  toxpipe-mcp:
