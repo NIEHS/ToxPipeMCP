@@ -26,7 +26,7 @@ CHEMBIOTOX_URL = env_config["CHEMBIOTOX_URL"]
 LLM = llm.create_llm_for_search()
 
 mcp = FastMCP(
-    name="ChemBioTox",
+    name="ToxPipeMCP",
     instructions="This server provides data and functions relating to toxicological and chemical attribute data for over one million chemicals studied by the EPA."
 )
 

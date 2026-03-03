@@ -3,7 +3,7 @@ version: '3.4'
 services:
   toxpipe-mcp:
     container_name: toxpipe-mcp
-    image: cbtmcp
+    image: toxpipe/tpmcp
     ports:
       - "9222:9222"
     restart: unless-stopped
