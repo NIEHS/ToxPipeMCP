@@ -5,3 +5,6 @@ ToxPipeMCP is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/d
 - Search via retrieval augmented generation (RAG) from reports published by the NTP.
 
 This MCP server is Dockerized and the [Dockerfile](https://github.com/NIEHS/ToxPipeMCP/blob/main/Dockerfile) is provided in the repository for quick and easy local setup.
+
+To build, run the following command from the project's root directory:
+`docker build . -t toxpipe/tpmcp`
