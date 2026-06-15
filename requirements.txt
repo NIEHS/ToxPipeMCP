@@ -148,3 +148,5 @@ xmltodict==1.0.2
 xxhash==3.6.0
 zipp==3.23.0
 zstandard==0.25.0
+pyOpenSSL>=26.0.0
+tornado>=6.5.5
