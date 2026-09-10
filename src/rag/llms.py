@@ -1,8 +1,6 @@
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from .utils import Config
 
-print(f'{Config.http_client=}')
-
 # ---------------------------------------------------------------------------
 def getAIModel(model_name: str, temperature: int = 0, is_embedding=False, **kwargs) -> ChatOpenAI | OpenAIEmbeddings:
     """
